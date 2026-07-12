@@ -24,6 +24,8 @@ const environmentSchema = z.object({
 
 export type UpstreamMode = 'provider' | 'passthrough';
 
+export type UpstreamModeSource = 'explicit' | 'inferred';
+
 export type AppConfig = Readonly<{
   host: string;
   port: number;
@@ -31,6 +33,7 @@ export type AppConfig = Readonly<{
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   upstreamBaseUrl: string;
   upstreamMode: UpstreamMode;
+  upstreamModeSource: UpstreamModeSource;
   upstreamApiKey?: string;
   upstreamTimeoutMs: number;
   debugToken?: string;
@@ -50,6 +53,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
 
   const upstreamApiKey = parsed.data.UPSTREAM_API_KEY || undefined;
+  const upstreamModeSource: UpstreamModeSource = parsed.data.UPSTREAM_MODE
+    ? 'explicit'
+    : 'inferred';
   const upstreamMode: UpstreamMode =
     parsed.data.UPSTREAM_MODE ?? (upstreamApiKey ? 'provider' : 'passthrough');
 
@@ -75,6 +81,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     logLevel: parsed.data.LOG_LEVEL,
     upstreamBaseUrl: (parsed.data.UPSTREAM_BASE_URL ?? defaultBaseUrl).replace(/\/$/, ''),
     upstreamMode,
+    upstreamModeSource,
     upstreamApiKey,
     upstreamTimeoutMs: parsed.data.UPSTREAM_TIMEOUT_MS,
     debugToken: parsed.data.DEBUG_TOKEN || undefined,

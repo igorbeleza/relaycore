@@ -13,6 +13,15 @@ async function shutdown(signal: NodeJS.Signals): Promise<void> {
 process.once('SIGINT', () => void shutdown('SIGINT'));
 process.once('SIGTERM', () => void shutdown('SIGTERM'));
 
+app.log.info(
+  {
+    upstreamMode: config.upstreamMode,
+    upstreamModeSource: config.upstreamModeSource,
+    upstreamBaseUrl: config.upstreamBaseUrl,
+  },
+  `Upstream mode: ${config.upstreamMode} (${config.upstreamModeSource})`,
+);
+
 try {
   await app.listen({ host: config.host, port: config.port });
 } catch (error) {

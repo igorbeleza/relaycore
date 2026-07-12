@@ -12,6 +12,7 @@ describe('loadConfig', () => {
       upstreamBaseUrl: 'https://api.anthropic.com',
       upstreamApiKey: undefined,
       upstreamMode: 'passthrough',
+      upstreamModeSource: 'inferred',
       upstreamTimeoutMs: 120000,
       debugToken: undefined,
       pxpipeEnabled: false,
@@ -36,12 +37,14 @@ describe('loadConfig', () => {
   it('infers provider mode when UPSTREAM_API_KEY is set', () => {
     const config = loadConfig({ UPSTREAM_API_KEY: 'sk-key' });
     expect(config.upstreamMode).toBe('provider');
+    expect(config.upstreamModeSource).toBe('inferred');
     expect(config.upstreamBaseUrl).toBe('https://api.oneprovider.dev');
   });
 
   it('accepts explicit UPSTREAM_MODE=provider with a key', () => {
     const config = loadConfig({ UPSTREAM_MODE: 'provider', UPSTREAM_API_KEY: 'sk-key' });
     expect(config.upstreamMode).toBe('provider');
+    expect(config.upstreamModeSource).toBe('explicit');
   });
 
   it('accepts explicit UPSTREAM_MODE=passthrough without a key', () => {

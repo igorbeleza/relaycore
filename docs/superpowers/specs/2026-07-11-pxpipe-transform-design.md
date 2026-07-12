@@ -97,14 +97,14 @@ original sequence.
 
 ## 5. Configuration (`src/config/env.ts`)
 
-| Variable                     | Default                 | Meaning                                          |
-| ---------------------------- | ----------------------- | ------------------------------------------------ |
-| `PXPIPE_ENABLED`             | `false`                 | Master switch (opt-in).                          |
-| `PXPIPE_MIN_CHARS`           | `4000`                  | Minimum block size to consider.                  |
-| `PXPIPE_SAVINGS_FACTOR`      | `0.7`                   | Convert only if image cost < text cost × factor. |
-| `PXPIPE_MAX_PAGES_PER_BLOCK` | `4`                     | Skip blocks that would exceed this.              |
-| `PXPIPE_KEEP_RECENT_TURNS`   | `3`                     | Most recent user turns always stay text.         |
-| `PXPIPE_SCOPE`               | `user_and_tool_results` | Or `tool_results_only` (more conservative).      |
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PXPIPE_ENABLED` | `false` | Master switch (opt-in). |
+| `PXPIPE_MIN_CHARS` | `4000` | Minimum block size to consider. |
+| `PXPIPE_SAVINGS_FACTOR` | `0.7` | Convert only if image cost < text cost × factor. |
+| `PXPIPE_MAX_PAGES_PER_BLOCK` | `4` | Skip blocks that would exceed this. |
+| `PXPIPE_KEEP_RECENT_TURNS` | `3` | Most recent user turns always stay text. |
+| `PXPIPE_SCOPE` | `user_and_tool_results` | Or `tool_results_only` (more conservative). |
 
 All validated with Zod, same as existing config.
 
@@ -165,9 +165,9 @@ Consistent with existing conventions (no prompt/response/key content in logs):
 
 ## 12. Risks
 
-| Risk                                                 | Mitigation                                                              |
-| ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| Model misreads rendered text (fidelity loss on code) | Conservative defaults: min-chars, keep-recent-turns, opt-in flag        |
-| Upstream model without vision → `400`                | Manual smoke test per model + one-shot retry with original payload      |
-| First activation invalidates upstream prompt cache   | Documented; deterministic rendering + cache restore hits from turn 2 on |
-| Render latency on large blocks                       | LRU cache; page cap; `@napi-rs/canvas` upgrade path                     |
+| Risk | Mitigation |
+| --- | --- |
+| Model misreads rendered text (fidelity loss on code) | Conservative defaults: min-chars, keep-recent-turns, opt-in flag |
+| Upstream model without vision → `400` | Manual smoke test per model + one-shot retry with original payload |
+| First activation invalidates upstream prompt cache | Documented; deterministic rendering + cache restore hits from turn 2 on |
+| Render latency on large blocks | LRU cache; page cap; `@napi-rs/canvas` upgrade path |

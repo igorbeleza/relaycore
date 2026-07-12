@@ -37,7 +37,7 @@ dependencies (client, metrics, diagnostics) for testing.
 
 - `README.md` — run/config/observability reference (keep in sync when behavior changes)
 - `docs/architecture-overview.md` — component overview
-- `docs/PRD_Claude_Proxy_v0.1.md`, `docs/SRS_Claude_Proxy_v0.1.md` — requirements (in Portuguese; IDs RF-_/REQ-F-_ used for traceability to tests)
+- `docs/PRD_Claude_Proxy_v0.1.md`, `docs/SRS_Claude_Proxy_v0.1.md` — requirements (in Portuguese; IDs RF-*/REQ-F-* used for traceability to tests)
 - `CONTRIBUTING.md` — PR checklist and rules
 
 ## Rules & Gotchas

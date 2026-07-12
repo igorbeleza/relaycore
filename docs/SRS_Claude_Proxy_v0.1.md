@@ -3,7 +3,7 @@
 **Projeto:** Claude Proxy **Versão:** 0.1-draft **Baseado em:**
 ISO/IEC/IEEE 29148 (estrutura adaptada)
 
----
+------------------------------------------------------------------------
 
 # 1. Introdução
 
@@ -20,24 +20,24 @@ destinado a clientes como Claude Code e provedores compatíveis.
 
 ## 1.3 Público-alvo
 
-- Arquitetos
-- Desenvolvedores
-- QA
-- DevOps
-- Maintainers
-- Contribuidores
+-   Arquitetos
+-   Desenvolvedores
+-   QA
+-   DevOps
+-   Maintainers
+-   Contribuidores
 
----
+------------------------------------------------------------------------
 
 # 2. Glossário
 
-- Provider: serviço compatível com a API Anthropic.
-- Core: núcleo do proxy.
-- Plugin: extensão carregada pelo mecanismo oficial.
-- Request Context: contexto interno da requisição.
-- SSE: Server-Sent Events.
+-   Provider: serviço compatível com a API Anthropic.
+-   Core: núcleo do proxy.
+-   Plugin: extensão carregada pelo mecanismo oficial.
+-   Request Context: contexto interno da requisição.
+-   SSE: Server-Sent Events.
 
----
+------------------------------------------------------------------------
 
 # 3. Visão Geral do Sistema
 
@@ -45,24 +45,24 @@ Fluxo lógico:
 
 Cliente ↓ Router ↓ Middleware ↓ Core ↓ Provider Client ↓ Provider
 
----
+------------------------------------------------------------------------
 
 # 4. Premissas
 
-- Compatibilidade com a API Anthropic.
-- Configuração por ambiente.
-- Arquitetura modular.
-- Execução stateless no núcleo.
+-   Compatibilidade com a API Anthropic.
+-   Configuração por ambiente.
+-   Arquitetura modular.
+-   Execução stateless no núcleo.
 
----
+------------------------------------------------------------------------
 
 # 5. Restrições
 
-- Não alterar o contrato público da API.
-- Evitar dependência de um provedor específico.
-- Preservar compatibilidade de streaming.
+-   Não alterar o contrato público da API.
+-   Evitar dependência de um provedor específico.
+-   Preservar compatibilidade de streaming.
 
----
+------------------------------------------------------------------------
 
 # 6. Casos de Uso
 
@@ -86,7 +86,7 @@ Consultar /health.
 
 Consultar métricas.
 
----
+------------------------------------------------------------------------
 
 # 7. Requisitos Funcionais
 
@@ -151,7 +151,7 @@ REQ-F-081 Registrar logs estruturados.
 
 REQ-F-082 Exportar métricas.
 
----
+------------------------------------------------------------------------
 
 # 8. Requisitos Não Funcionais
 
@@ -171,7 +171,7 @@ REQ-NF-007 Configuração validada por esquema.
 
 REQ-NF-008 Observabilidade integrada.
 
----
+------------------------------------------------------------------------
 
 # 9. Interfaces Externas
 
@@ -191,77 +191,75 @@ JSON estruturado.
 
 Prometheus.
 
----
+------------------------------------------------------------------------
 
 # 10. Modelo de Dados (Inicial)
 
 Entidades:
 
-- RequestContext
-- ProviderRequest
-- ProviderResponse
-- Plugin
-- Configuration
-- MetricSnapshot
+-   RequestContext
+-   ProviderRequest
+-   ProviderResponse
+-   Plugin
+-   Configuration
+-   MetricSnapshot
 
----
+------------------------------------------------------------------------
 
 # 11. Segurança
 
-- Segredos por ambiente.
-- Validação de entrada.
-- Timeouts.
-- Auditoria de dependências.
-- Rate limiting (configurável).
+-   Segredos por ambiente.
+-   Validação de entrada.
+-   Timeouts.
+-   Auditoria de dependências.
+-   Rate limiting (configurável).
 
----
+------------------------------------------------------------------------
 
 # 12. Observabilidade
 
-- Logs estruturados
-- Request ID
-- Correlation ID
-- Prometheus
-- OpenTelemetry
+-   Logs estruturados
+-   Request ID
+-   Correlation ID
+-   Prometheus
+-   OpenTelemetry
 
----
+------------------------------------------------------------------------
 
 # 13. Estratégia de Testes
 
-- Unitários
-- Integração
-- Contrato
-- E2E
-- Carga
+-   Unitários
+-   Integração
+-   Contrato
+-   E2E
+-   Carga
 
 Todo requisito deverá possuir rastreabilidade para pelo menos um teste.
 
----
+------------------------------------------------------------------------
 
 # 14. Critérios de Aceite
 
 Cada requisito será considerado implementado quando:
 
-- código aprovado;
-- testes aprovados;
-- documentação atualizada;
-- cobertura adequada;
-- CI verde.
+-   código aprovado;
+-   testes aprovados;
+-   documentação atualizada;
+-   cobertura adequada;
+-   CI verde.
 
----
+------------------------------------------------------------------------
 
 # 15. Matriz de Rastreabilidade (Inicial)
 
-Requisito Arquitetura Teste
+  Requisito   Arquitetura       Teste
+  ----------- ----------------- -------------
+  REQ-F-001   Router            Integration
+  REQ-F-005   Streaming Relay   E2E
+  REQ-F-020   Admin API         Unit
+  REQ-F-082   Metrics           Integration
 
----
-
-REQ-F-001 Router Integration
-REQ-F-005 Streaming Relay E2E
-REQ-F-020 Admin API Unit
-REQ-F-082 Metrics Integration
-
----
+------------------------------------------------------------------------
 
 # 16. Evolução
 

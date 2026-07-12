@@ -13,6 +13,12 @@ describe('loadConfig', () => {
       upstreamApiKey: undefined,
       upstreamTimeoutMs: 120000,
       debugToken: undefined,
+      pxpipeEnabled: false,
+      pxpipeMinChars: 4000,
+      pxpipeSavingsFactor: 0.7,
+      pxpipeMaxPagesPerBlock: 4,
+      pxpipeKeepRecentTurns: 3,
+      pxpipeScope: 'user_and_tool_results',
     });
   });
 

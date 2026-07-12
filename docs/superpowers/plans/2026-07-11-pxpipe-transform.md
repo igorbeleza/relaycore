@@ -27,28 +27,30 @@
 
 ## File Map
 
-| Path | Responsibility |
-| --- | --- |
-| `src/config/env.ts` | Add the six `PXPIPE_*` variables (Task 1) |
-| `src/pxpipe/estimator.ts` | Geometry constants, token math, line layout, eligibility gate (Task 2) |
-| `src/pxpipe/renderer.ts` | `RenderedPage` / `TextRenderer` contract (Task 3) + `PureImageRenderer` (Task 4) |
-| `src/pxpipe/render-cache.ts` | LRU cache with TTL and byte budget (Task 3) |
-| `src/pxpipe/transform.ts` | Request-body walker, block replacement, fail-open (Task 5) |
-| `src/metrics/metrics-registry.ts` | pxpipe counters (Task 6) |
-| `src/routes/messages.ts` + `src/app/create-app.ts` | Wiring, 400-retry, logging (Task 7) |
-| `assets/fonts/` | Vendored DejaVuSansMono.ttf + license (Task 4) |
-| `README.md`, `.env.example`, `docs/architecture-overview.md`, `Dockerfile` | Docs & packaging (Task 8) |
+| Path                                                                       | Responsibility                                                                   |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `src/config/env.ts`                                                        | Add the six `PXPIPE_*` variables (Task 1)                                        |
+| `src/pxpipe/estimator.ts`                                                  | Geometry constants, token math, line layout, eligibility gate (Task 2)           |
+| `src/pxpipe/renderer.ts`                                                   | `RenderedPage` / `TextRenderer` contract (Task 3) + `PureImageRenderer` (Task 4) |
+| `src/pxpipe/render-cache.ts`                                               | LRU cache with TTL and byte budget (Task 3)                                      |
+| `src/pxpipe/transform.ts`                                                  | Request-body walker, block replacement, fail-open (Task 5)                       |
+| `src/metrics/metrics-registry.ts`                                          | pxpipe counters (Task 6)                                                         |
+| `src/routes/messages.ts` + `src/app/create-app.ts`                         | Wiring, 400-retry, logging (Task 7)                                              |
+| `assets/fonts/`                                                            | Vendored DejaVuSansMono.ttf + license (Task 4)                                   |
+| `README.md`, `.env.example`, `docs/architecture-overview.md`, `Dockerfile` | Docs & packaging (Task 8)                                                        |
 
 ---
 
 ### Task 1: pxpipe configuration
 
 **Files:**
+
 - Modify: `src/config/env.ts`
 - Create: `tests/unit/pxpipe-config.test.ts`
 - Modify: every test file whose `AppConfig` object literal fails typecheck (at least `tests/integration/messages.test.ts:13-20`)
 
 **Interfaces:**
+
 - Consumes: existing `loadConfig(environment?)` / `AppConfig`.
 - Produces: `AppConfig` gains `pxpipeEnabled: boolean`, `pxpipeMinChars: number`, `pxpipeSavingsFactor: number`, `pxpipeMaxPagesPerBlock: number`, `pxpipeKeepRecentTurns: number`, `pxpipeScope: 'user_and_tool_results' | 'tool_results_only'`. All later tasks read these fields.
 
@@ -123,12 +125,12 @@ In `src/config/env.ts`, add to `environmentSchema` (after the `DEBUG_TOKEN` line
 Add to the `AppConfig` type (after `debugToken?: string;`):
 
 ```ts
-  pxpipeEnabled: boolean;
-  pxpipeMinChars: number;
-  pxpipeSavingsFactor: number;
-  pxpipeMaxPagesPerBlock: number;
-  pxpipeKeepRecentTurns: number;
-  pxpipeScope: 'user_and_tool_results' | 'tool_results_only';
+pxpipeEnabled: boolean;
+pxpipeMinChars: number;
+pxpipeSavingsFactor: number;
+pxpipeMaxPagesPerBlock: number;
+pxpipeKeepRecentTurns: number;
+pxpipeScope: 'user_and_tool_results' | 'tool_results_only';
 ```
 
 Add to the returned `Object.freeze({ ... })` (after `debugToken: ...`):
@@ -176,10 +178,12 @@ git commit -m "feat(pxpipe): add PXPIPE_* configuration (REQ-F-100)"
 ### Task 2: Estimator and eligibility gate
 
 **Files:**
+
 - Create: `src/pxpipe/estimator.ts`
 - Create: `tests/unit/pxpipe-estimator.test.ts`
 
 **Interfaces:**
+
 - Consumes: `AppConfig` from Task 1.
 - Produces (used by Tasks 4, 5):
   - Constants: `PAGE_WIDTH_PX = 1568`, `FONT_SIZE_PX = 10`, `CHAR_WIDTH_PX = 6`, `LINE_HEIGHT_PX = 12`, `COLUMNS_PER_LINE = 258`, `LINES_PER_PAGE = 130`, `PAGE_HEIGHT_PX`, `IMAGE_TOKENS_PER_PAGE = 3262`.
@@ -362,11 +366,13 @@ git commit -m "feat(pxpipe): token estimator and eligibility gate"
 ### Task 3: Renderer contract and LRU render cache
 
 **Files:**
+
 - Create: `src/pxpipe/renderer.ts` (types only in this task)
 - Create: `src/pxpipe/render-cache.ts`
 - Create: `tests/unit/pxpipe-render-cache.test.ts`
 
 **Interfaces:**
+
 - Produces (used by Tasks 4, 5, 7):
 
 ```ts
@@ -379,10 +385,10 @@ export interface TextRenderer {
 // src/pxpipe/render-cache.ts
 export class RenderCache {
   constructor(options?: {
-    maxEntries?: number;   // default 200
+    maxEntries?: number; // default 200
     maxTotalBytes?: number; // default 64 MiB
-    ttlMs?: number;        // default 3_600_000
-    now?: () => number;    // injectable clock for tests
+    ttlMs?: number; // default 3_600_000
+    now?: () => number; // injectable clock for tests
   });
   key(text: string): string; // sha256 hex
   get(key: string): readonly RenderedPage[] | undefined;
@@ -568,12 +574,14 @@ git commit -m "feat(pxpipe): renderer contract and LRU render cache"
 ### Task 4: PureImageRenderer (real PNG rasterizer)
 
 **Files:**
+
 - Modify: `src/pxpipe/renderer.ts` (add implementation below the interface)
 - Create: `assets/fonts/DejaVuSansMono.ttf`, `assets/fonts/DejaVuSansMono-LICENSE.txt` (vendored)
 - Create: `tests/unit/pxpipe-renderer.test.ts`
 - Modify: `package.json` (dependency `pureimage`)
 
 **Interfaces:**
+
 - Consumes: `PAGE_WIDTH_PX`, `LINE_HEIGHT_PX`, `FONT_SIZE_PX` from Task 2; `TextRenderer` / `RenderedPage` from Task 3.
 - Produces: `class PureImageRenderer implements TextRenderer` (constructed by `create-app.ts` in Task 7).
 
@@ -604,28 +612,20 @@ import { PureImageRenderer } from '../../src/pxpipe/renderer.js';
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 describe('PureImageRenderer', () => {
-  it(
-    'renders lines to a PNG page with the expected geometry',
-    async () => {
-      const renderer = new PureImageRenderer();
-      const [rendered] = await renderer.renderPages([['const answer = 42;', 'export {};']]);
-      expect(rendered.png.subarray(0, 8)).toEqual(PNG_SIGNATURE);
-      expect(rendered.width).toBe(PAGE_WIDTH_PX);
-      expect(rendered.height).toBe(2 * LINE_HEIGHT_PX);
-    },
-    30_000,
-  );
+  it('renders lines to a PNG page with the expected geometry', async () => {
+    const renderer = new PureImageRenderer();
+    const [rendered] = await renderer.renderPages([['const answer = 42;', 'export {};']]);
+    expect(rendered.png.subarray(0, 8)).toEqual(PNG_SIGNATURE);
+    expect(rendered.width).toBe(PAGE_WIDTH_PX);
+    expect(rendered.height).toBe(2 * LINE_HEIGHT_PX);
+  }, 30_000);
 
-  it(
-    'produces byte-identical output for identical input',
-    async () => {
-      const renderer = new PureImageRenderer();
-      const [first] = await renderer.renderPages([['deterministic output']]);
-      const [second] = await renderer.renderPages([['deterministic output']]);
-      expect(first.png.equals(second.png)).toBe(true);
-    },
-    30_000,
-  );
+  it('produces byte-identical output for identical input', async () => {
+    const renderer = new PureImageRenderer();
+    const [first] = await renderer.renderPages([['deterministic output']]);
+    const [second] = await renderer.renderPages([['deterministic output']]);
+    expect(first.png.equals(second.png)).toBe(true);
+  }, 30_000);
 });
 ```
 
@@ -647,9 +647,7 @@ import * as PImage from 'pureimage';
 import { FONT_SIZE_PX, LINE_HEIGHT_PX, PAGE_WIDTH_PX } from './estimator.js';
 
 const FONT_FAMILY = 'DejaVuSansMono';
-const FONT_PATH = fileURLToPath(
-  new URL('../../assets/fonts/DejaVuSansMono.ttf', import.meta.url),
-);
+const FONT_PATH = fileURLToPath(new URL('../../assets/fonts/DejaVuSansMono.ttf', import.meta.url));
 
 export class PureImageRenderer implements TextRenderer {
   private fontLoaded: Promise<void> | undefined;
@@ -662,9 +660,7 @@ export class PureImageRenderer implements TextRenderer {
     return this.fontLoaded;
   }
 
-  public async renderPages(
-    pages: readonly (readonly string[])[],
-  ): Promise<RenderedPage[]> {
+  public async renderPages(pages: readonly (readonly string[])[]): Promise<RenderedPage[]> {
     await this.ensureFont();
     const rendered: RenderedPage[] = [];
     for (const lines of pages) {
@@ -712,10 +708,12 @@ git commit -m "feat(pxpipe): pureimage PNG renderer with vendored DejaVu Sans Mo
 ### Task 5: Transform stage
 
 **Files:**
+
 - Create: `src/pxpipe/transform.ts`
 - Create: `tests/unit/pxpipe-transform.test.ts`
 
 **Interfaces:**
+
 - Consumes: `evaluateBlock` (Task 2), `RenderCache` (Task 3), `TextRenderer`/`RenderedPage` (Task 3), `AppConfig` (Task 1).
 - Produces (used by Task 7):
 
@@ -752,9 +750,7 @@ class FakeRenderer implements TextRenderer {
   public renderCalls = 0;
   public shouldFail = false;
 
-  public async renderPages(
-    pages: readonly (readonly string[])[],
-  ): Promise<RenderedPage[]> {
+  public async renderPages(pages: readonly (readonly string[])[]): Promise<RenderedPage[]> {
     this.renderCalls += 1;
     if (this.shouldFail) throw new Error('render failed');
     return pages.map(() => ({ png: Buffer.from('fake-png'), width: 1568, height: 1560 }));
@@ -960,7 +956,13 @@ export type PxpipeResult = Readonly<{
 type ContentBlock = Record<string, unknown>;
 
 function emptyStats(): PxpipeStats {
-  return { blocksConverted: 0, pagesRendered: 0, estTokensSaved: 0, cacheHits: 0, renderFailures: 0 };
+  return {
+    blocksConverted: 0,
+    pagesRendered: 0,
+    estTokensSaved: 0,
+    cacheHits: 0,
+    renderFailures: 0,
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1132,10 +1134,12 @@ git commit -m "feat(pxpipe): request-body transform with fail-open and cache (RE
 ### Task 6: pxpipe metrics counters
 
 **Files:**
+
 - Modify: `src/metrics/metrics-registry.ts`
 - Create: `tests/unit/pxpipe-metrics.test.ts`
 
 **Interfaces:**
+
 - Produces (used by Task 7): on `MetricsRegistry` —
   - `recordPxpipeConversion(blocksConverted: number, tokensSavedEstimate: number): void`
   - `recordPxpipeRenderFailure(): void`
@@ -1243,11 +1247,13 @@ git commit -m "feat(pxpipe): prometheus counters for conversions, failures, reje
 ### Task 7: Route wiring and 400-retry
 
 **Files:**
+
 - Modify: `src/routes/messages.ts`
 - Modify: `src/app/create-app.ts`
 - Create: `tests/integration/pxpipe.test.ts`
 
 **Interfaces:**
+
 - Consumes: `transformRequestBody` (Task 5), `RenderCache` (Task 3), `PureImageRenderer`/`TextRenderer` (Tasks 3-4), metrics methods (Task 6).
 - Produces:
   - `registerMessagesRoute(app, client, diagnostics, metrics, pxpipe?)` — new optional 5th parameter `PxpipeIntegration = Readonly<{ config: AppConfig; renderer: TextRenderer; cache: RenderCache }>`.
@@ -1313,9 +1319,7 @@ function badRequestUpstream() {
 class FakeRenderer implements TextRenderer {
   public shouldFail = false;
 
-  public async renderPages(
-    pages: readonly (readonly string[])[],
-  ): Promise<RenderedPage[]> {
+  public async renderPages(pages: readonly (readonly string[])[]): Promise<RenderedPage[]> {
     if (this.shouldFail) throw new Error('render failed');
     return pages.map(() => ({ png: Buffer.from('fake-png'), width: 1568, height: 1560 }));
   }
@@ -1584,20 +1588,20 @@ export type CreateAppOptions = Readonly<{
 Replace the `registerMessagesRoute(...)` call with:
 
 ```ts
-  const pxpipe = config.pxpipeEnabled
-    ? {
-        config,
-        renderer: options.textRenderer ?? new PureImageRenderer(),
-        cache: options.renderCache ?? new RenderCache(),
-      }
-    : undefined;
-  registerMessagesRoute(
-    app,
-    options.anthropicClient ?? new FetchAnthropicClient(config),
-    diagnostics,
-    metrics,
-    pxpipe,
-  );
+const pxpipe = config.pxpipeEnabled
+  ? {
+      config,
+      renderer: options.textRenderer ?? new PureImageRenderer(),
+      cache: options.renderCache ?? new RenderCache(),
+    }
+  : undefined;
+registerMessagesRoute(
+  app,
+  options.anthropicClient ?? new FetchAnthropicClient(config),
+  diagnostics,
+  metrics,
+  pxpipe,
+);
 ```
 
 - [ ] **Step 5: Run test to verify it passes**
@@ -1618,9 +1622,11 @@ git commit -m "feat(pxpipe): wire transform into /v1/messages with 400-retry (RE
 ### Task 8: Docs, packaging, and manual smoke checklist
 
 **Files:**
+
 - Modify: `.env.example`, `README.md`, `docs/architecture-overview.md`, `Dockerfile`
 
 **Interfaces:**
+
 - Consumes: everything shipped in Tasks 1-7. No code produced.
 
 - [ ] **Step 1: Append to `.env.example`**
@@ -1655,14 +1661,14 @@ are never modified.
   retries once with the original body.
 - Metrics: `relaycore_pxpipe_*` counters on `GET /metrics`.
 
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `PXPIPE_ENABLED` | `false` | Master switch. |
-| `PXPIPE_MIN_CHARS` | `4000` | Minimum block size considered. |
-| `PXPIPE_SAVINGS_FACTOR` | `0.7` | Convert only if image cost < text cost × factor. |
-| `PXPIPE_MAX_PAGES_PER_BLOCK` | `4` | Blocks needing more pages stay as text. |
-| `PXPIPE_KEEP_RECENT_TURNS` | `3` | Most recent user turns always stay text. |
-| `PXPIPE_SCOPE` | `user_and_tool_results` | Or `tool_results_only`. |
+| Variable                     | Default                 | Meaning                                          |
+| ---------------------------- | ----------------------- | ------------------------------------------------ |
+| `PXPIPE_ENABLED`             | `false`                 | Master switch.                                   |
+| `PXPIPE_MIN_CHARS`           | `4000`                  | Minimum block size considered.                   |
+| `PXPIPE_SAVINGS_FACTOR`      | `0.7`                   | Convert only if image cost < text cost × factor. |
+| `PXPIPE_MAX_PAGES_PER_BLOCK` | `4`                     | Blocks needing more pages stay as text.          |
+| `PXPIPE_KEEP_RECENT_TURNS`   | `3`                     | Most recent user turns always stay text.         |
+| `PXPIPE_SCOPE`               | `user_and_tool_results` | Or `tool_results_only`.                          |
 
 Design details: `docs/superpowers/specs/2026-07-11-pxpipe-transform-design.md`.
 Before enabling in daily use, run the manual smoke test below once per model

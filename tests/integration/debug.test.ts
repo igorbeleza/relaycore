@@ -14,6 +14,12 @@ const testConfig: AppConfig = {
   upstreamBaseUrl: 'https://provider.example.test',
   upstreamTimeoutMs: 120000,
   debugToken: 'test-debug-token-123',
+  pxpipeEnabled: false,
+  pxpipeMinChars: 4000,
+  pxpipeSavingsFactor: 0.7,
+  pxpipeMaxPagesPerBlock: 4,
+  pxpipeKeepRecentTurns: 3,
+  pxpipeScope: 'user_and_tool_results',
 };
 
 const encoder = new TextEncoder();

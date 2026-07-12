@@ -26,7 +26,57 @@ describe('loadConfig', () => {
       dedupMinChars: 500,
       dedupScope: 'user_and_tool_results',
       dedupKeepRecentTurns: 0,
+      dashboardEnabled: true,
+      relaycoreDataDir: undefined,
+      dashboardRetentionDays: 30,
+      dashboardRecentLimit: 50,
     });
+  });
+
+  it('disables the dashboard when DASHBOARD_ENABLED=false', () => {
+    expect(loadConfig({ DASHBOARD_ENABLED: 'false' }).dashboardEnabled).toBe(false);
+  });
+
+  it('rejects an invalid DASHBOARD_ENABLED value', () => {
+    expect(() => loadConfig({ DASHBOARD_ENABLED: 'yes' })).toThrow(
+      'Invalid environment configuration',
+    );
+  });
+
+  it('accepts a custom RELAYCORE_DATA_DIR and trims it', () => {
+    expect(loadConfig({ RELAYCORE_DATA_DIR: '  /var/relaycore  ' }).relaycoreDataDir).toBe(
+      '/var/relaycore',
+    );
+  });
+
+  it('treats an empty RELAYCORE_DATA_DIR as unset', () => {
+    expect(loadConfig({ RELAYCORE_DATA_DIR: '   ' }).relaycoreDataDir).toBeUndefined();
+  });
+
+  it('accepts a custom DASHBOARD_RETENTION_DAYS', () => {
+    expect(loadConfig({ DASHBOARD_RETENTION_DAYS: '7' }).dashboardRetentionDays).toBe(7);
+  });
+
+  it('rejects a DASHBOARD_RETENTION_DAYS above the 365 ceiling', () => {
+    expect(() => loadConfig({ DASHBOARD_RETENTION_DAYS: '400' })).toThrow(
+      'Invalid environment configuration',
+    );
+  });
+
+  it('rejects a DASHBOARD_RETENTION_DAYS below the 1 day floor', () => {
+    expect(() => loadConfig({ DASHBOARD_RETENTION_DAYS: '0' })).toThrow(
+      'Invalid environment configuration',
+    );
+  });
+
+  it('accepts a custom DASHBOARD_RECENT_LIMIT', () => {
+    expect(loadConfig({ DASHBOARD_RECENT_LIMIT: '100' }).dashboardRecentLimit).toBe(100);
+  });
+
+  it('rejects a DASHBOARD_RECENT_LIMIT above the 500 ceiling', () => {
+    expect(() => loadConfig({ DASHBOARD_RECENT_LIMIT: '999' })).toThrow(
+      'Invalid environment configuration',
+    );
   });
 
   it('rejects an invalid port', () => {

@@ -39,6 +39,14 @@ const environmentSchema = z.object({
     .enum(['user_and_tool_results', 'tool_results_only'])
     .default('user_and_tool_results'),
   DEDUP_KEEP_RECENT_TURNS: z.coerce.number().int().min(0).max(50).default(0),
+  DASHBOARD_ENABLED: z.enum(['true', 'false']).default('true'),
+  RELAYCORE_DATA_DIR: z
+    .string()
+    .trim()
+    .optional()
+    .transform((value) => (value === '' ? undefined : value)),
+  DASHBOARD_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  DASHBOARD_RECENT_LIMIT: z.coerce.number().int().min(1).max(500).default(50),
 });
 
 export type UpstreamMode = 'provider' | 'passthrough';
@@ -67,6 +75,10 @@ export type AppConfig = Readonly<{
   dedupMinChars: number;
   dedupScope: 'user_and_tool_results' | 'tool_results_only';
   dedupKeepRecentTurns: number;
+  dashboardEnabled: boolean;
+  relaycoreDataDir?: string;
+  dashboardRetentionDays: number;
+  dashboardRecentLimit: number;
 }>;
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -120,5 +132,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
     dedupMinChars: parsed.data.DEDUP_MIN_CHARS,
     dedupScope: parsed.data.DEDUP_SCOPE,
     dedupKeepRecentTurns: parsed.data.DEDUP_KEEP_RECENT_TURNS,
+    dashboardEnabled: parsed.data.DASHBOARD_ENABLED === 'true',
+    relaycoreDataDir: parsed.data.RELAYCORE_DATA_DIR,
+    dashboardRetentionDays: parsed.data.DASHBOARD_RETENTION_DAYS,
+    dashboardRecentLimit: parsed.data.DASHBOARD_RECENT_LIMIT,
   });
 }

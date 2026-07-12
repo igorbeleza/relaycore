@@ -175,6 +175,29 @@ Before enabling in daily use, run the manual smoke test below once per model
 you use (OneProvider models: <https://oneprovider.dev/docs/api/models>; vision
 docs: <https://oneprovider.dev/docs/api/vision>).
 
+## Savings dashboard
+
+When `DASHBOARD_ENABLED=true` (the default), RelayCore serves a local
+self-contained dashboard that summarizes the tokens saved by pxpipe and dedup,
+alongside request counts, converted/deduplicated block counts, latency
+percentiles, and a feed of recent requests.
+
+- Shell: `GET /dashboard` returns a static HTML page (no external assets).
+- Live feed: `GET /dashboard/stats.json` returns the current snapshot with a
+  `cache-control: no-store` header; the page polls it in the background.
+- Persistence: each optimized request is appended best-effort to an event log
+  under the data directory, so totals survive restarts. On startup the
+  aggregator is seeded from that log and trimmed to the retention window.
+- Fail-open: dashboard recording never blocks or fails a proxied request.
+- Disabled: with `DASHBOARD_ENABLED=false`, both endpoints respond as not found.
+
+| Variable                   | Default          | Meaning                                            |
+| -------------------------- | ---------------- | -------------------------------------------------- |
+| `DASHBOARD_ENABLED`        | `true`           | Master switch for the dashboard endpoints.         |
+| `RELAYCORE_DATA_DIR`       | OS data dir      | Directory for the persisted event log.             |
+| `DASHBOARD_RETENTION_DAYS` | `30`             | Days of events retained (`1`–`365`).               |
+| `DASHBOARD_RECENT_LIMIT`   | `50`             | Recent requests shown in the feed (`1`–`500`).     |
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

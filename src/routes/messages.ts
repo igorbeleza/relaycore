@@ -3,6 +3,8 @@ import { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { AppConfig } from '../config/env.js';
+import type { OptimizationEvent } from '../dashboard/event-store.js';
+import type { DashboardService } from '../dashboard/service.js';
 import type { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import type { MetricsRegistry } from '../metrics/metrics-registry.js';
 import type { RenderCache } from '../pxpipe/render-cache.js';
@@ -277,14 +279,88 @@ export type PxpipeIntegration = Readonly<{
   cache: RenderCache;
 }>;
 
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+type DedupSummary = Mutable<OptimizationEvent['dedup']>;
+type PxpipeSummary = Mutable<OptimizationEvent['pxpipe']>;
+
+function emptyDedupSummary(): DedupSummary {
+  return { blocksDeduped: 0, estTokensSaved: 0 };
+}
+
+function emptyPxpipeSummary(): PxpipeSummary {
+  return {
+    blocksConverted: 0,
+    pagesRendered: 0,
+    estTokensSaved: 0,
+    cacheHits: 0,
+    renderFailures: 0,
+    upstreamRejected: false,
+  };
+}
+
+/** Best-effort inbound size: prefer the client's content-length, fall back to the parsed body. */
+function estimateBytesIn(request: FastifyRequest): number {
+  const header = request.headers['content-length'];
+  if (typeof header === 'string') {
+    const parsed = Number(header);
+    if (Number.isFinite(parsed) && parsed >= 0) return parsed;
+  }
+  try {
+    return Buffer.byteLength(JSON.stringify(request.body ?? ''), 'utf8');
+  } catch {
+    return 0;
+  }
+}
+
+/** Best-effort outbound size from the reply's content-length (unset for streamed responses). */
+function estimateBytesOut(reply: FastifyReply): number {
+  const header = reply.getHeader('content-length');
+  const parsed = Number(Array.isArray(header) ? header[0] : header);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function buildOptimizationEvent(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  startedAt: number,
+  dedup: DedupSummary,
+  pxpipe: PxpipeSummary,
+): OptimizationEvent {
+  return {
+    ts: startedAt,
+    requestId: request.id,
+    method: request.method,
+    route: request.routeOptions.url ?? request.url.split('?')[0],
+    statusCode: reply.statusCode,
+    durationMs: Date.now() - startedAt,
+    model: getRequestModel(request.body),
+    bytesIn: estimateBytesIn(request),
+    bytesOut: estimateBytesOut(reply),
+    dedup,
+    pxpipe,
+  };
+}
+
 export function registerMessagesRoute(
   app: FastifyInstance,
   client: AnthropicClient,
   diagnostics: DiagnosticsRegistry,
   metrics: MetricsRegistry,
   pxpipe?: PxpipeIntegration,
+  dashboard?: DashboardService,
 ): void {
   app.post('/v1/messages', async (request, reply) => {
+    const startedAt = Date.now();
+    const dedupSummary = emptyDedupSummary();
+    const pxpipeSummary = emptyPxpipeSummary();
+    const recordEvent = (): void => {
+      if (dashboard) {
+        dashboard.record(
+          buildOptimizationEvent(request, reply, startedAt, dedupSummary, pxpipeSummary),
+        );
+      }
+    };
+
     try {
       const headers = new Headers();
       for (const [name, value] of Object.entries(request.headers)) {
@@ -301,6 +377,14 @@ export function registerMessagesRoute(
           pxpipe.cache,
         );
         const { dedup, pxpipe: pxpipeStats } = optimized.stats;
+
+        dedupSummary.blocksDeduped = dedup.blocksDeduped;
+        dedupSummary.estTokensSaved = dedup.estTokensSaved;
+        pxpipeSummary.blocksConverted = pxpipeStats.blocksConverted;
+        pxpipeSummary.pagesRendered = pxpipeStats.pagesRendered;
+        pxpipeSummary.estTokensSaved = pxpipeStats.estTokensSaved;
+        pxpipeSummary.cacheHits = pxpipeStats.cacheHits;
+        pxpipeSummary.renderFailures = pxpipeStats.renderFailures;
 
         if (dedup.blocksDeduped > 0) {
           metrics.recordDedup(dedup.blocksDeduped, dedup.estTokensSaved);
@@ -342,6 +426,7 @@ export function registerMessagesRoute(
       let upstream = await client.createMessage(outboundBody, headers);
       if (upstream.status === 400 && bodyTransformed) {
         metrics.recordPxpipeUpstreamRejection();
+        pxpipeSummary.upstreamRejected = true;
         request.log.warn(
           { requestId: request.id, upstreamStatus: upstream.status },
           'Upstream rejected transformed payload; retrying once with the original body',
@@ -350,11 +435,22 @@ export function registerMessagesRoute(
       }
 
       if (upstream.status >= 400) {
-        return relayUpstreamError(request, reply, upstream, diagnostics, metrics);
+        const result = await relayUpstreamError(request, reply, upstream, diagnostics, metrics);
+        recordEvent();
+        return result;
       }
-      return relayResponse(request, reply, upstream, isStreamingRequest(request.body));
+      const result = await relayResponse(
+        request,
+        reply,
+        upstream,
+        isStreamingRequest(request.body),
+      );
+      recordEvent();
+      return result;
     } catch (error) {
-      return handleUpstreamFailure(request, reply, error, diagnostics, metrics);
+      const result = await handleUpstreamFailure(request, reply, error, diagnostics, metrics);
+      recordEvent();
+      return result;
     }
   });
 }

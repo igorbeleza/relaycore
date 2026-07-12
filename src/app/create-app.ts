@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyInstance } from 'fastify';
 
 import type { AppConfig } from '../config/env.js';
+import { DashboardService } from '../dashboard/service.js';
 import { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import { MetricsRegistry } from '../metrics/metrics-registry.js';
 import { RenderCache } from '../pxpipe/render-cache.js';
@@ -12,6 +13,7 @@ import {
   FetchUpstreamHealthChecker,
   type UpstreamHealthChecker,
 } from '../providers/upstream-health.js';
+import { registerDashboardRoute } from '../routes/dashboard.js';
 import { registerDebugRoute } from '../routes/debug.js';
 import { registerMessagesRoute } from '../routes/messages.js';
 
@@ -21,6 +23,7 @@ export type CreateAppOptions = Readonly<{
   metrics?: MetricsRegistry;
   upstreamHealthChecker?: UpstreamHealthChecker;
   textRenderer?: TextRenderer;
+  dashboard?: DashboardService;
 }>;
 
 export function createApp(config: AppConfig, options: CreateAppOptions = {}): FastifyInstance {
@@ -86,6 +89,20 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
     return reply.type('text/plain; version=0.0.4; charset=utf-8').send(metrics.renderPrometheus());
   });
 
+  const dashboard =
+    options.dashboard ??
+    (config.dashboardEnabled
+      ? new DashboardService(config, {
+          warn: (details, message) => app.log.warn(details, message),
+        })
+      : undefined);
+  if (dashboard) {
+    void dashboard
+      .initialize()
+      .catch((error: unknown) => app.log.warn({ error }, 'dashboard initialization failed'));
+    registerDashboardRoute(app, config, dashboard);
+  }
+
   registerDebugRoute(app, config, diagnostics);
   registerMessagesRoute(
     app,
@@ -97,6 +114,7 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
       renderer: options.textRenderer ?? new PureImageRenderer(),
       cache: new RenderCache(),
     },
+    dashboard,
   );
 
   app.setErrorHandler((error, _request, reply) => {

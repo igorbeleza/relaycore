@@ -1,5 +1,8 @@
 export type DiagnosticErrorSource =
-  'upstream_http_error' | 'upstream_configuration_error' | 'upstream_request_error';
+  | 'upstream_http_error'
+  | 'upstream_configuration_error'
+  | 'upstream_request_error'
+  | 'missing_client_credentials';
 
 export type DiagnosticErrorRecord = Readonly<{
   requestId: string;

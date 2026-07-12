@@ -9,7 +9,11 @@ import type { RenderCache } from '../pxpipe/render-cache.js';
 import type { TextRenderer } from '../pxpipe/renderer.js';
 import { transformRequestBody } from '../pxpipe/transform.js';
 import type { AnthropicClient, UpstreamResponse } from '../providers/anthropic-client.js';
-import { UpstreamConfigurationError, UpstreamRequestError } from '../providers/anthropic-client.js';
+import {
+  MissingClientCredentialsError,
+  UpstreamConfigurationError,
+  UpstreamRequestError,
+} from '../providers/anthropic-client.js';
 
 const RESPONSE_HEADERS = [
   'content-type',
@@ -31,7 +35,7 @@ type ParsedUpstreamError = Readonly<{
   message: string;
 }>;
 
-function isStreamingRequest(body: unknown): boolean {
+export function isStreamingRequest(body: unknown): boolean {
   return (
     typeof body === 'object' && body !== null && (body as { stream?: unknown }).stream === true
   );
@@ -119,7 +123,7 @@ function copyResponseHeaders(reply: FastifyReply, upstream: UpstreamResponse): v
   }
 }
 
-async function relayUpstreamError(
+export async function relayUpstreamError(
   request: FastifyRequest,
   reply: FastifyReply,
   upstream: UpstreamResponse,
@@ -169,7 +173,7 @@ async function relayUpstreamError(
   });
 }
 
-async function relayResponse(
+export async function relayResponse(
   request: FastifyRequest,
   reply: FastifyReply,
   upstream: UpstreamResponse,
@@ -195,6 +199,76 @@ async function relayResponse(
     })
     .pipe(reply.raw);
   return reply;
+}
+
+export async function handleUpstreamFailure(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  error: unknown,
+  diagnostics: DiagnosticsRegistry,
+  metrics: MetricsRegistry,
+): Promise<FastifyReply> {
+  const route = request.routeOptions.url ?? request.url.split('?')[0];
+
+  if (error instanceof MissingClientCredentialsError) {
+    metrics.recordUpstreamError(401, 'authentication_error');
+    diagnostics.recordError({
+      requestId: request.id,
+      source: 'missing_client_credentials',
+      method: request.method,
+      route,
+      model: getRequestModel(request.body),
+      statusCode: 401,
+      errorType: 'authentication_error',
+      errorMessage: error.message,
+    });
+    return reply.status(401).send({
+      type: 'error',
+      error: { type: 'authentication_error', message: error.message },
+      request_id: request.id,
+    });
+  }
+
+  if (error instanceof UpstreamConfigurationError) {
+    metrics.recordUpstreamError(503, 'api_error');
+    diagnostics.recordError({
+      requestId: request.id,
+      source: 'upstream_configuration_error',
+      method: request.method,
+      route,
+      model: getRequestModel(request.body),
+      statusCode: 503,
+      errorType: 'api_error',
+      errorMessage: error.message,
+    });
+    return reply.status(503).send({
+      type: 'error',
+      error: { type: 'api_error', message: error.message },
+      request_id: request.id,
+    });
+  }
+
+  if (error instanceof UpstreamRequestError) {
+    request.log.error(error.cause, error.message);
+    metrics.recordUpstreamError(502, 'api_error');
+    diagnostics.recordError({
+      requestId: request.id,
+      source: 'upstream_request_error',
+      method: request.method,
+      route,
+      model: getRequestModel(request.body),
+      statusCode: 502,
+      errorType: 'api_error',
+      errorMessage: error.message,
+    });
+    return reply.status(502).send({
+      type: 'error',
+      error: { type: 'api_error', message: error.message },
+      request_id: request.id,
+    });
+  }
+
+  throw error;
 }
 
 export type PxpipeIntegration = Readonly<{
@@ -268,44 +342,7 @@ export function registerMessagesRoute(
       }
       return relayResponse(request, reply, upstream, isStreamingRequest(request.body));
     } catch (error) {
-      if (error instanceof UpstreamConfigurationError) {
-        metrics.recordUpstreamError(503, 'api_error');
-        diagnostics.recordError({
-          requestId: request.id,
-          source: 'upstream_configuration_error',
-          method: request.method,
-          route: request.routeOptions.url ?? request.url.split('?')[0],
-          model: getRequestModel(request.body),
-          statusCode: 503,
-          errorType: 'api_error',
-          errorMessage: error.message,
-        });
-        return reply.status(503).send({
-          type: 'error',
-          error: { type: 'api_error', message: error.message },
-          request_id: request.id,
-        });
-      }
-      if (error instanceof UpstreamRequestError) {
-        request.log.error(error.cause, error.message);
-        metrics.recordUpstreamError(502, 'api_error');
-        diagnostics.recordError({
-          requestId: request.id,
-          source: 'upstream_request_error',
-          method: request.method,
-          route: request.routeOptions.url ?? request.url.split('?')[0],
-          model: getRequestModel(request.body),
-          statusCode: 502,
-          errorType: 'api_error',
-          errorMessage: error.message,
-        });
-        return reply.status(502).send({
-          type: 'error',
-          error: { type: 'api_error', message: error.message },
-          request_id: request.id,
-        });
-      }
-      throw error;
+      return handleUpstreamFailure(request, reply, error, diagnostics, metrics);
     }
   });
 }

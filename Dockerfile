@@ -17,6 +17,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
+COPY assets ./assets
 
 USER node
 EXPOSE 47822

@@ -121,6 +121,34 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:47822/debug/errors?error_type=invalid_r
 
 Without `DEBUG_TOKEN`, debug endpoints respond as not found.
 
+## pxpipe: text-to-image request transform
+
+When `PXPIPE_ENABLED=true`, RelayCore converts large text blocks in old user
+turns of `POST /v1/messages` into PNG image blocks before forwarding upstream.
+Anthropic-compatible APIs bill images at roughly `(width × height) / 750`
+tokens, which is cheaper than the equivalent text for large blocks. Responses
+are never modified.
+
+- Opt-in: `PXPIPE_ENABLED=false` by default.
+- Fail-open: any rendering problem forwards the original request unchanged.
+- If the upstream rejects a transformed request with HTTP 400, RelayCore
+  retries once with the original body.
+- Metrics: `relaycore_pxpipe_*` counters on `GET /metrics`.
+
+| Variable                     | Default                 | Meaning                                          |
+| ---------------------------- | ----------------------- | ------------------------------------------------ |
+| `PXPIPE_ENABLED`             | `false`                 | Master switch.                                   |
+| `PXPIPE_MIN_CHARS`           | `4000`                  | Minimum block size considered.                   |
+| `PXPIPE_SAVINGS_FACTOR`      | `0.7`                   | Convert only if image cost < text cost × factor. |
+| `PXPIPE_MAX_PAGES_PER_BLOCK` | `4`                     | Blocks needing more pages stay as text.          |
+| `PXPIPE_KEEP_RECENT_TURNS`   | `3`                     | Most recent user turns always stay text.         |
+| `PXPIPE_SCOPE`               | `user_and_tool_results` | Or `tool_results_only`.                          |
+
+Design details: `docs/superpowers/specs/2026-07-11-pxpipe-transform-design.md`.
+Before enabling in daily use, run the manual smoke test below once per model
+you use (OneProvider models: <https://oneprovider.dev/docs/api/models>; vision
+docs: <https://oneprovider.dev/docs/api/vision>).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

@@ -6,6 +6,7 @@ import { createApp } from '../../src/app/create-app.js';
 import type { AppConfig } from '../../src/config/env.js';
 import {
   type AnthropicClient,
+  MissingClientCredentialsError,
   UpstreamConfigurationError,
   UpstreamRequestError,
 } from '../../src/providers/anthropic-client.js';
@@ -16,6 +17,7 @@ const testConfig: AppConfig = {
   environment: 'test',
   logLevel: 'silent',
   upstreamBaseUrl: 'https://provider.example.test',
+  upstreamMode: 'passthrough',
   upstreamTimeoutMs: 120000,
   pxpipeEnabled: false,
   pxpipeMinChars: 4000,
@@ -138,6 +140,38 @@ describe('messages endpoint', () => {
     expect(body.request_id).toBeTruthy();
     expect(body.upstream_request_id).toBe(`upstream_${status}`);
     expect(body.upstream_status).toBe(status);
+  });
+
+  it('returns 401 with authentication_error when passthrough credentials are missing', async () => {
+    const client: AnthropicClient = {
+      createMessage: async () => {
+        throw new MissingClientCredentialsError();
+      },
+    };
+    const app = createApp(testConfig, { anthropicClient: client });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/messages',
+      payload: { model: 'claude-sonnet-4-6', max_tokens: 16, messages: [] },
+    });
+    const body = response.json() as {
+      type: string;
+      error: { type: string; message: string };
+      request_id: string;
+    };
+
+    expect(response.statusCode).toBe(401);
+    expect(body.type).toBe('error');
+    expect(body.error.type).toBe('authentication_error');
+    expect(body.error.message).toContain('authorization or x-api-key');
+    expect(body.request_id).toBeTruthy();
+
+    const metrics = await app.inject({ method: 'GET', url: '/metrics' });
+    expect(metrics.body).toContain(
+      'relaycore_upstream_errors_total{status_code="401",error_type="authentication_error"} 1',
+    );
   });
 
   it('includes request_id when upstream configuration is missing', async () => {

@@ -1,0 +1,12 @@
+services:
+  relaycore:
+    build:
+      context: .
+    environment:
+      HOST: 0.0.0.0
+      PORT: 47822
+      NODE_ENV: production
+      LOG_LEVEL: info
+    ports:
+      - '47822:47822'
+    restart: unless-stopped

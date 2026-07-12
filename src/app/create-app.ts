@@ -5,6 +5,8 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import type { AppConfig } from '../config/env.js';
 import { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import { MetricsRegistry } from '../metrics/metrics-registry.js';
+import { RenderCache } from '../pxpipe/render-cache.js';
+import { PureImageRenderer, type TextRenderer } from '../pxpipe/renderer.js';
 import { FetchAnthropicClient, type AnthropicClient } from '../providers/anthropic-client.js';
 import {
   FetchUpstreamHealthChecker,
@@ -18,6 +20,7 @@ export type CreateAppOptions = Readonly<{
   diagnostics?: DiagnosticsRegistry;
   metrics?: MetricsRegistry;
   upstreamHealthChecker?: UpstreamHealthChecker;
+  textRenderer?: TextRenderer;
 }>;
 
 export function createApp(config: AppConfig, options: CreateAppOptions = {}): FastifyInstance {
@@ -88,6 +91,11 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
     options.anthropicClient ?? new FetchAnthropicClient(config),
     diagnostics,
     metrics,
+    {
+      config,
+      renderer: options.textRenderer ?? new PureImageRenderer(),
+      cache: new RenderCache(),
+    },
   );
 
   app.setErrorHandler((error, _request, reply) => {

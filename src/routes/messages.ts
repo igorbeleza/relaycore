@@ -2,8 +2,12 @@ import { Readable } from 'node:stream';
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
+import type { AppConfig } from '../config/env.js';
 import type { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import type { MetricsRegistry } from '../metrics/metrics-registry.js';
+import type { RenderCache } from '../pxpipe/render-cache.js';
+import type { TextRenderer } from '../pxpipe/renderer.js';
+import { transformRequestBody } from '../pxpipe/transform.js';
 import type { AnthropicClient, UpstreamResponse } from '../providers/anthropic-client.js';
 import { UpstreamConfigurationError, UpstreamRequestError } from '../providers/anthropic-client.js';
 
@@ -193,11 +197,18 @@ async function relayResponse(
   return reply;
 }
 
+export type PxpipeIntegration = Readonly<{
+  config: AppConfig;
+  renderer: TextRenderer;
+  cache: RenderCache;
+}>;
+
 export function registerMessagesRoute(
   app: FastifyInstance,
   client: AnthropicClient,
   diagnostics: DiagnosticsRegistry,
   metrics: MetricsRegistry,
+  pxpipe?: PxpipeIntegration,
 ): void {
   app.post('/v1/messages', async (request, reply) => {
     try {
@@ -206,7 +217,52 @@ export function registerMessagesRoute(
         if (typeof value === 'string') headers.set(name, value);
       }
 
-      const upstream = await client.createMessage(request.body, headers);
+      let outboundBody = request.body;
+      let pxpipeConverted = false;
+      if (pxpipe?.config.pxpipeEnabled) {
+        const transformed = await transformRequestBody(
+          request.body,
+          pxpipe.config,
+          pxpipe.renderer,
+          pxpipe.cache,
+        );
+        if (transformed.stats.renderFailures > 0) {
+          metrics.recordPxpipeRenderFailure();
+          request.log.warn(
+            { requestId: request.id },
+            'pxpipe rendering failed; forwarding original request body',
+          );
+        }
+        if (transformed.stats.blocksConverted > 0) {
+          metrics.recordPxpipeConversion(
+            transformed.stats.blocksConverted,
+            transformed.stats.estTokensSaved,
+          );
+          outboundBody = transformed.body;
+          pxpipeConverted = true;
+          request.log.info(
+            {
+              requestId: request.id,
+              blocksConverted: transformed.stats.blocksConverted,
+              pagesRendered: transformed.stats.pagesRendered,
+              estTokensSaved: transformed.stats.estTokensSaved,
+              cacheHits: transformed.stats.cacheHits,
+            },
+            'pxpipe converted request blocks to images',
+          );
+        }
+      }
+
+      let upstream = await client.createMessage(outboundBody, headers);
+      if (upstream.status === 400 && pxpipeConverted) {
+        metrics.recordPxpipeUpstreamRejection();
+        request.log.warn(
+          { requestId: request.id, upstreamStatus: upstream.status },
+          'Upstream rejected pxpipe payload; retrying once with the original body',
+        );
+        upstream = await client.createMessage(request.body, headers);
+      }
+
       if (upstream.status >= 400) {
         return relayUpstreamError(request, reply, upstream, diagnostics, metrics);
       }

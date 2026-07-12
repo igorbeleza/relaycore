@@ -8,6 +8,7 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   UPSTREAM_BASE_URL: z.url().optional(),
+  UPSTREAM_MODE: z.enum(['provider', 'passthrough']).optional(),
   UPSTREAM_API_KEY: z.string().trim().optional(),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(300_000).default(120_000),
   DEBUG_TOKEN: z.string().trim().min(16).optional(),
@@ -49,7 +50,21 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): AppCon
   }
 
   const upstreamApiKey = parsed.data.UPSTREAM_API_KEY || undefined;
-  const upstreamMode: UpstreamMode = upstreamApiKey ? 'provider' : 'passthrough';
+  const upstreamMode: UpstreamMode =
+    parsed.data.UPSTREAM_MODE ?? (upstreamApiKey ? 'provider' : 'passthrough');
+
+  if (upstreamMode === 'provider' && !upstreamApiKey) {
+    throw new Error(
+      'Invalid environment configuration: UPSTREAM_MODE=provider requires UPSTREAM_API_KEY to be set',
+    );
+  }
+
+  if (upstreamMode === 'passthrough' && upstreamApiKey) {
+    throw new Error(
+      'Invalid environment configuration: UPSTREAM_MODE=passthrough must not be combined with UPSTREAM_API_KEY (remove the key or use UPSTREAM_MODE=provider)',
+    );
+  }
+
   const defaultBaseUrl =
     upstreamMode === 'provider' ? 'https://api.oneprovider.dev' : 'https://api.anthropic.com';
 

@@ -7,7 +7,7 @@ import type { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js
 import type { MetricsRegistry } from '../metrics/metrics-registry.js';
 import type { RenderCache } from '../pxpipe/render-cache.js';
 import type { TextRenderer } from '../pxpipe/renderer.js';
-import { transformRequestBody } from '../pxpipe/transform.js';
+import { optimizeRequestBody } from '../optimize/optimize.js';
 import type { AnthropicClient, UpstreamResponse } from '../providers/anthropic-client.js';
 import {
   MissingClientCredentialsError,
@@ -292,47 +292,59 @@ export function registerMessagesRoute(
       }
 
       let outboundBody = request.body;
-      let pxpipeConverted = false;
-      if (pxpipe?.config.pxpipeEnabled) {
-        const transformed = await transformRequestBody(
+      let bodyTransformed = false;
+      if (pxpipe && (pxpipe.config.dedupEnabled || pxpipe.config.pxpipeEnabled)) {
+        const optimized = await optimizeRequestBody(
           request.body,
           pxpipe.config,
           pxpipe.renderer,
           pxpipe.cache,
         );
-        if (transformed.stats.renderFailures > 0) {
-          metrics.recordPxpipeRenderFailure();
-          request.log.warn(
-            { requestId: request.id },
-            'pxpipe rendering failed; forwarding original request body',
-          );
-        }
-        if (transformed.stats.blocksConverted > 0) {
-          metrics.recordPxpipeConversion(
-            transformed.stats.blocksConverted,
-            transformed.stats.estTokensSaved,
-          );
-          outboundBody = transformed.body;
-          pxpipeConverted = true;
+        const { dedup, pxpipe: pxpipeStats } = optimized.stats;
+
+        if (dedup.blocksDeduped > 0) {
+          metrics.recordDedup(dedup.blocksDeduped, dedup.estTokensSaved);
           request.log.info(
             {
               requestId: request.id,
-              blocksConverted: transformed.stats.blocksConverted,
-              pagesRendered: transformed.stats.pagesRendered,
-              estTokensSaved: transformed.stats.estTokensSaved,
-              cacheHits: transformed.stats.cacheHits,
+              blocksDeduped: dedup.blocksDeduped,
+              estTokensSaved: dedup.estTokensSaved,
+            },
+            'dedup replaced duplicate request blocks with references',
+          );
+        }
+        if (pxpipeStats.renderFailures > 0) {
+          metrics.recordPxpipeRenderFailure();
+          request.log.warn(
+            { requestId: request.id },
+            'pxpipe rendering failed; forwarding request body without image conversion',
+          );
+        }
+        if (pxpipeStats.blocksConverted > 0) {
+          metrics.recordPxpipeConversion(pxpipeStats.blocksConverted, pxpipeStats.estTokensSaved);
+          request.log.info(
+            {
+              requestId: request.id,
+              blocksConverted: pxpipeStats.blocksConverted,
+              pagesRendered: pxpipeStats.pagesRendered,
+              estTokensSaved: pxpipeStats.estTokensSaved,
+              cacheHits: pxpipeStats.cacheHits,
             },
             'pxpipe converted request blocks to images',
           );
         }
+        if (dedup.blocksDeduped > 0 || pxpipeStats.blocksConverted > 0) {
+          outboundBody = optimized.body;
+          bodyTransformed = true;
+        }
       }
 
       let upstream = await client.createMessage(outboundBody, headers);
-      if (upstream.status === 400 && pxpipeConverted) {
+      if (upstream.status === 400 && bodyTransformed) {
         metrics.recordPxpipeUpstreamRejection();
         request.log.warn(
           { requestId: request.id, upstreamStatus: upstream.status },
-          'Upstream rejected pxpipe payload; retrying once with the original body',
+          'Upstream rejected transformed payload; retrying once with the original body',
         );
         upstream = await client.createMessage(request.body, headers);
       }

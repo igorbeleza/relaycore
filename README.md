@@ -63,17 +63,18 @@ The service will listen on `http://127.0.0.1:47822`.
 
 ## Configuration
 
-| Variable              | Default                       | Description                               |
-| --------------------- | ----------------------------- | ----------------------------------------- |
-| `HOST`                | `127.0.0.1`                   | HTTP listener address.                    |
-| `PORT`                | `47822`                       | HTTP listener port.                       |
-| `NODE_ENV`            | `development`                 | `development`, `test`, or `production`.   |
-| `LOG_LEVEL`           | `info`                        | Pino/Fastify log verbosity.               |
-| `UPSTREAM_MODE`       | _(inferred)_                  | `provider` or `passthrough` (see below).  |
-| `UPSTREAM_BASE_URL`   | _(depends on mode)_           | Base URL of the compatible provider.      |
-| `UPSTREAM_API_KEY`    | _(required in provider mode)_ | API key held only by RelayCore.           |
-| `UPSTREAM_TIMEOUT_MS` | `120000`                      | Upstream request timeout in milliseconds. |
-| `DEBUG_TOKEN`         | _(disabled)_                  | Enables protected local debug endpoints.  |
+| Variable                 | Default                       | Description                               |
+| ------------------------ | ----------------------------- | ----------------------------------------- |
+| `HOST`                   | `127.0.0.1`                   | HTTP listener address.                    |
+| `PORT`                   | `47822`                       | HTTP listener port.                       |
+| `NODE_ENV`               | `development`                 | `development`, `test`, or `production`.   |
+| `LOG_LEVEL`              | `info`                        | Pino/Fastify log verbosity.               |
+| `UPSTREAM_MODE`          | _(inferred)_                  | `provider` or `passthrough` (see below).  |
+| `UPSTREAM_BASE_URL`      | _(depends on mode)_           | Base URL of the compatible provider.      |
+| `UPSTREAM_API_KEY`       | _(required in provider mode)_ | API key held only by RelayCore.           |
+| `UPSTREAM_TIMEOUT_MS`    | `120000`                      | Upstream request timeout in milliseconds. |
+| `MAX_REQUEST_BODY_BYTES` | `20971520` (20 MiB)           | Max accepted request body size, in bytes. |
+| `DEBUG_TOKEN`            | _(disabled)_                  | Enables protected local debug endpoints.  |
 
 ### Upstream modes
 

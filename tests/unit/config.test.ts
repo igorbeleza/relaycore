@@ -14,6 +14,7 @@ describe('loadConfig', () => {
       upstreamMode: 'passthrough',
       upstreamModeSource: 'inferred',
       upstreamTimeoutMs: 120000,
+      maxRequestBodyBytes: 20971520,
       debugToken: undefined,
       pxpipeEnabled: false,
       pxpipeMinChars: 4000,
@@ -21,6 +22,10 @@ describe('loadConfig', () => {
       pxpipeMaxPagesPerBlock: 4,
       pxpipeKeepRecentTurns: 3,
       pxpipeScope: 'user_and_tool_results',
+      dedupEnabled: false,
+      dedupMinChars: 500,
+      dedupScope: 'user_and_tool_results',
+      dedupKeepRecentTurns: 0,
     });
   });
 
@@ -31,6 +36,24 @@ describe('loadConfig', () => {
   it('loads a configured debug token', () => {
     expect(loadConfig({ DEBUG_TOKEN: 'debug-token-at-least-16-chars' }).debugToken).toBe(
       'debug-token-at-least-16-chars',
+    );
+  });
+
+  it('treats an empty DEBUG_TOKEN as unset rather than rejecting it', () => {
+    expect(loadConfig({ DEBUG_TOKEN: '' }).debugToken).toBeUndefined();
+  });
+
+  it('rejects a DEBUG_TOKEN shorter than 16 characters', () => {
+    expect(() => loadConfig({ DEBUG_TOKEN: 'short' })).toThrow('Invalid environment configuration');
+  });
+
+  it('accepts a custom MAX_REQUEST_BODY_BYTES', () => {
+    expect(loadConfig({ MAX_REQUEST_BODY_BYTES: '5242880' }).maxRequestBodyBytes).toBe(5242880);
+  });
+
+  it('rejects a MAX_REQUEST_BODY_BYTES below the 1 MiB floor', () => {
+    expect(() => loadConfig({ MAX_REQUEST_BODY_BYTES: '100' })).toThrow(
+      'Invalid environment configuration',
     );
   });
 

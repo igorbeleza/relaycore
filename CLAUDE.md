@@ -31,6 +31,7 @@ dependencies (client, metrics, diagnostics) for testing.
 - `src/providers/` — upstream HTTP client + `/health/upstream` reachability check
 - `src/metrics/` — Prometheus text at `/metrics`
 - `src/diagnostics/` — in-memory registry of recent sanitized errors
+- `src/pxpipe/` — text-to-image transform for large request bodies
 - `tests/unit/`, `tests/integration/` — Vitest
 
 ## Docs Map
@@ -44,6 +45,7 @@ dependencies (client, metrics, diagnostics) for testing.
 
 - **Never** read `process.env` outside `src/config/env.ts`. Config is frozen; trailing slash is stripped from `UPSTREAM_BASE_URL`.
 - **Never** log request bodies, model output, or provider keys. Error messages forwarded to clients are sanitized and truncated (500 chars).
+- `DEBUG_TOKEN=` (empty string) in `.env` is treated as unset, not as a validation error.
 - Zod **v4** API (`z.url()`, `z.prettifyError`) — do not use v3 idioms.
 - Pure ESM (`"type": "module"`): relative imports in TS need `.js` extensions.
 - Do not alter the Anthropic protocol contract; core must stay provider-agnostic (PRD constraint).
@@ -53,12 +55,8 @@ dependencies (client, metrics, diagnostics) for testing.
 
 ## Roadmap (not yet implemented)
 
-- **Token-saving text-to-image transform (pxpipe-like)**: automatically render long text
-  blocks in proxied requests as images to reduce token usage. Specified as RF-016 (PRD)
-  and REQ-F-100..103 (SRS); not implemented yet.
 - Plugin mechanism (RF-009/REQ-F-060..062) and retry policy (RF-012) are specified but not built.
 
 ## Notes
 
 - `docs/ategora.md` — project history imported from another platform (ChatGPT/Codex sessions): bootstrap PR-001, port move 47821→47822, OneProvider proxy, observability, debug routes. OneProvider-accepted model IDs: `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-haiku-4-5-20251001`.
-- Git branch `master` currently has no commits.

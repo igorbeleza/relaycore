@@ -25,6 +25,8 @@ export class MetricsRegistry {
   private pxpipeTokensSavedEstimate = 0;
   private pxpipeRenderFailures = 0;
   private pxpipeUpstreamRejected = 0;
+  private dedupBlocksDeduped = 0;
+  private dedupTokensSavedEstimate = 0;
 
   public startRequest(): void {
     this.inFlight += 1;
@@ -57,6 +59,11 @@ export class MetricsRegistry {
     this.pxpipeUpstreamRejected += 1;
   }
 
+  public recordDedup(blocksDeduped: number, tokensSavedEstimate: number): void {
+    this.dedupBlocksDeduped += blocksDeduped;
+    this.dedupTokensSavedEstimate += tokensSavedEstimate;
+  }
+
   public renderPrometheus(): string {
     const lines = [
       '# HELP relaycore_http_requests_in_flight Number of HTTP requests currently being handled.',
@@ -80,6 +87,12 @@ export class MetricsRegistry {
       '# HELP relaycore_pxpipe_upstream_rejected_total Transformed requests rejected upstream and retried as text.',
       '# TYPE relaycore_pxpipe_upstream_rejected_total counter',
       `relaycore_pxpipe_upstream_rejected_total ${this.pxpipeUpstreamRejected}`,
+      '# HELP relaycore_dedup_blocks_deduped_total Duplicate content blocks replaced with a reference by dedup.',
+      '# TYPE relaycore_dedup_blocks_deduped_total counter',
+      `relaycore_dedup_blocks_deduped_total ${this.dedupBlocksDeduped}`,
+      '# HELP relaycore_dedup_tokens_saved_estimate_total Estimated input tokens saved by dedup.',
+      '# TYPE relaycore_dedup_tokens_saved_estimate_total counter',
+      `relaycore_dedup_tokens_saved_estimate_total ${this.dedupTokensSavedEstimate}`,
     ];
 
     for (const [key, aggregate] of this.requests) {

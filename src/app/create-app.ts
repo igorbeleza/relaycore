@@ -32,6 +32,7 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
     },
     requestIdHeader: 'x-request-id',
     genReqId: () => randomUUID(),
+    bodyLimit: config.maxRequestBodyBytes,
   });
 
   app.addHook('onRequest', async (request, reply) => {

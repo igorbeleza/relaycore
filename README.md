@@ -37,8 +37,9 @@ Check upstream configuration and reachability:
 curl http://127.0.0.1:47822/health/upstream
 ```
 
-This endpoint verifies that `UPSTREAM_API_KEY` is configured and that the upstream base URL responds
-at the HTTP level. It does not send prompts or perform a model request.
+This endpoint verifies that the upstream configuration is valid (in provider mode, that
+`UPSTREAM_API_KEY` is configured) and that the upstream base URL responds at the HTTP level.
+It does not send prompts or perform a model request.
 
 ## Commands
 
@@ -68,15 +69,31 @@ The service will listen on `http://127.0.0.1:47822`.
 | `PORT`                | `47822`                       | HTTP listener port.                       |
 | `NODE_ENV`            | `development`                 | `development`, `test`, or `production`.   |
 | `LOG_LEVEL`           | `info`                        | Pino/Fastify log verbosity.               |
-| `UPSTREAM_BASE_URL`   | `https://api.oneprovider.dev` | Base URL of the compatible provider.      |
-| `UPSTREAM_API_KEY`    | _(required for proxying)_     | API key held only by RelayCore.           |
+| `UPSTREAM_MODE`       | _(inferred)_                  | `provider` or `passthrough` (see below).  |
+| `UPSTREAM_BASE_URL`   | _(depends on mode)_           | Base URL of the compatible provider.      |
+| `UPSTREAM_API_KEY`    | _(required in provider mode)_ | API key held only by RelayCore.           |
 | `UPSTREAM_TIMEOUT_MS` | `120000`                      | Upstream request timeout in milliseconds. |
 | `DEBUG_TOKEN`         | _(disabled)_                  | Enables protected local debug endpoints.  |
 
+### Upstream modes
+
+RelayCore authenticates upstream requests in one of two modes:
+
+- **`provider`** — RelayCore holds `UPSTREAM_API_KEY` and replaces whatever key the client sent
+  before forwarding. The client key never reaches the provider. Requires `UPSTREAM_API_KEY`.
+  Default base URL: `https://api.oneprovider.dev`.
+- **`passthrough`** — RelayCore forwards the client's own `authorization` / `x-api-key` headers
+  unchanged to the upstream. Requests without client credentials are rejected with `401`.
+  `UPSTREAM_API_KEY` must be empty in this mode. Default base URL: `https://api.anthropic.com`.
+
+When `UPSTREAM_MODE` is unset, the mode is inferred: `provider` if `UPSTREAM_API_KEY` is set,
+`passthrough` otherwise. Inconsistent combinations (`provider` without a key, `passthrough` with
+a key) fail at startup with a configuration error.
+
 ## Configure Claude Code
 
-Set Claude Code to use RelayCore and a non-secret placeholder key: RelayCore replaces it with
-`UPSTREAM_API_KEY` before sending to the provider.
+In **provider mode**, set Claude Code to use RelayCore and a non-secret placeholder key:
+RelayCore replaces it with `UPSTREAM_API_KEY` before sending to the provider.
 
 ```powershell
 $env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:47822'
@@ -85,6 +102,14 @@ claude
 ```
 
 Add your real OneProvider key to `UPSTREAM_API_KEY` in `.env` before running `claude`.
+
+In **passthrough mode**, keep your real Anthropic credentials in the client: RelayCore forwards
+them unchanged to `https://api.anthropic.com` (or your `UPSTREAM_BASE_URL`).
+
+```powershell
+$env:ANTHROPIC_BASE_URL = 'http://127.0.0.1:47822'
+claude
+```
 
 ## Observability
 

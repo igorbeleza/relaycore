@@ -42,4 +42,19 @@ describe('MetricsRegistry', () => {
       'relaycore_upstream_errors_total{status_code="429",error_type="rate_limit_error"} 1',
     );
   });
+
+  it('exports plugin failure counters keyed by plugin name', () => {
+    const metrics = new MetricsRegistry();
+    metrics.recordPluginFailure('dedup');
+    metrics.recordPluginFailure('pxpipe');
+    metrics.recordPluginFailure('pxpipe');
+
+    const output = metrics.renderPrometheus();
+
+    expect(output).toContain(
+      '# TYPE relaycore_plugin_failures_total counter',
+    );
+    expect(output).toContain('relaycore_plugin_failures_total{plugin="dedup"} 1');
+    expect(output).toContain('relaycore_plugin_failures_total{plugin="pxpipe"} 2');
+  });
 });

@@ -20,6 +20,7 @@ function escapeLabel(value: string): string {
 export class MetricsRegistry {
   private readonly requests = new Map<MetricKey, RequestAggregate>();
   private readonly upstreamErrors = new Map<UpstreamErrorMetricKey, number>();
+  private readonly pluginFailures = new Map<string, number>();
   private inFlight = 0;
   private pxpipeBlocksConverted = 0;
   private pxpipeTokensSavedEstimate = 0;
@@ -64,6 +65,10 @@ export class MetricsRegistry {
     this.dedupTokensSavedEstimate += tokensSavedEstimate;
   }
 
+  public recordPluginFailure(plugin: string): void {
+    this.pluginFailures.set(plugin, (this.pluginFailures.get(plugin) ?? 0) + 1);
+  }
+
   public renderPrometheus(): string {
     const lines = [
       '# HELP relaycore_http_requests_in_flight Number of HTTP requests currently being handled.',
@@ -93,6 +98,8 @@ export class MetricsRegistry {
       '# HELP relaycore_dedup_tokens_saved_estimate_total Estimated input tokens saved by dedup.',
       '# TYPE relaycore_dedup_tokens_saved_estimate_total counter',
       `relaycore_dedup_tokens_saved_estimate_total ${this.dedupTokensSavedEstimate}`,
+      '# HELP relaycore_plugin_failures_total Plugin hook failures isolated by the registry (fail-open), by plugin.',
+      '# TYPE relaycore_plugin_failures_total counter',
     ];
 
     for (const [key, aggregate] of this.requests) {
@@ -108,6 +115,10 @@ export class MetricsRegistry {
       const [statusCode, errorType] = key.split('|');
       const labels = `status_code="${statusCode}",error_type="${escapeLabel(errorType)}"`;
       lines.push(`relaycore_upstream_errors_total{${labels}} ${count}`);
+    }
+
+    for (const [plugin, count] of this.pluginFailures) {
+      lines.push(`relaycore_plugin_failures_total{plugin="${escapeLabel(plugin)}"} ${count}`);
     }
 
     return `${lines.join('\n')}\n`;

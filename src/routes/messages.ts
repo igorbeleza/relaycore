@@ -7,9 +7,7 @@ import type { OptimizationEvent } from '../dashboard/event-store.js';
 import type { DashboardService } from '../dashboard/service.js';
 import type { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import type { MetricsRegistry } from '../metrics/metrics-registry.js';
-import type { RenderCache } from '../pxpipe/render-cache.js';
-import type { TextRenderer } from '../pxpipe/renderer.js';
-import { optimizeRequestBody } from '../optimize/optimize.js';
+import type { PluginContext, PluginRegistry } from '../plugins/index.js';
 import type { AnthropicClient, UpstreamResponse } from '../providers/anthropic-client.js';
 import {
   MissingClientCredentialsError,
@@ -273,12 +271,6 @@ export async function handleUpstreamFailure(
   throw error;
 }
 
-export type PxpipeIntegration = Readonly<{
-  config: AppConfig;
-  renderer: TextRenderer;
-  cache: RenderCache;
-}>;
-
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 type DedupSummary = Mutable<OptimizationEvent['dedup']>;
 type PxpipeSummary = Mutable<OptimizationEvent['pxpipe']>;
@@ -343,22 +335,27 @@ function buildOptimizationEvent(
 
 export function registerMessagesRoute(
   app: FastifyInstance,
+  config: AppConfig,
   client: AnthropicClient,
   diagnostics: DiagnosticsRegistry,
   metrics: MetricsRegistry,
-  pxpipe?: PxpipeIntegration,
+  plugins: PluginRegistry,
   dashboard?: DashboardService,
 ): void {
   app.post('/v1/messages', async (request, reply) => {
     const startedAt = Date.now();
     const dedupSummary = emptyDedupSummary();
     const pxpipeSummary = emptyPxpipeSummary();
+    const pluginContext: PluginContext = {
+      config,
+      requestId: request.id,
+      logger: request.log,
+      metrics,
+    };
     const recordEvent = (): void => {
-      if (dashboard) {
-        dashboard.record(
-          buildOptimizationEvent(request, reply, startedAt, dedupSummary, pxpipeSummary),
-        );
-      }
+      const event = buildOptimizationEvent(request, reply, startedAt, dedupSummary, pxpipeSummary);
+      if (dashboard) dashboard.record(event);
+      plugins.runOnComplete(event, pluginContext);
     };
 
     try {
@@ -369,56 +366,25 @@ export function registerMessagesRoute(
 
       let outboundBody = request.body;
       let bodyTransformed = false;
-      if (pxpipe && (pxpipe.config.dedupEnabled || pxpipe.config.pxpipeEnabled)) {
-        const optimized = await optimizeRequestBody(
-          request.body,
-          pxpipe.config,
-          pxpipe.renderer,
-          pxpipe.cache,
-        );
-        const { dedup, pxpipe: pxpipeStats } = optimized.stats;
+      if (plugins.hasEnabledTransforms(config)) {
+        const outcome = await plugins.runTransforms(request.body, pluginContext);
 
-        dedupSummary.blocksDeduped = dedup.blocksDeduped;
-        dedupSummary.estTokensSaved = dedup.estTokensSaved;
-        pxpipeSummary.blocksConverted = pxpipeStats.blocksConverted;
-        pxpipeSummary.pagesRendered = pxpipeStats.pagesRendered;
-        pxpipeSummary.estTokensSaved = pxpipeStats.estTokensSaved;
-        pxpipeSummary.cacheHits = pxpipeStats.cacheHits;
-        pxpipeSummary.renderFailures = pxpipeStats.renderFailures;
+        const dedupStats = outcome.statsByPlugin.dedup;
+        if (dedupStats) {
+          dedupSummary.blocksDeduped = dedupStats.blocksDeduped ?? 0;
+          dedupSummary.estTokensSaved = dedupStats.estTokensSaved ?? 0;
+        }
+        const pxpipeStats = outcome.statsByPlugin.pxpipe;
+        if (pxpipeStats) {
+          pxpipeSummary.blocksConverted = pxpipeStats.blocksConverted ?? 0;
+          pxpipeSummary.pagesRendered = pxpipeStats.pagesRendered ?? 0;
+          pxpipeSummary.estTokensSaved = pxpipeStats.estTokensSaved ?? 0;
+          pxpipeSummary.cacheHits = pxpipeStats.cacheHits ?? 0;
+          pxpipeSummary.renderFailures = pxpipeStats.renderFailures ?? 0;
+        }
 
-        if (dedup.blocksDeduped > 0) {
-          metrics.recordDedup(dedup.blocksDeduped, dedup.estTokensSaved);
-          request.log.info(
-            {
-              requestId: request.id,
-              blocksDeduped: dedup.blocksDeduped,
-              estTokensSaved: dedup.estTokensSaved,
-            },
-            'dedup replaced duplicate request blocks with references',
-          );
-        }
-        if (pxpipeStats.renderFailures > 0) {
-          metrics.recordPxpipeRenderFailure();
-          request.log.warn(
-            { requestId: request.id },
-            'pxpipe rendering failed; forwarding request body without image conversion',
-          );
-        }
-        if (pxpipeStats.blocksConverted > 0) {
-          metrics.recordPxpipeConversion(pxpipeStats.blocksConverted, pxpipeStats.estTokensSaved);
-          request.log.info(
-            {
-              requestId: request.id,
-              blocksConverted: pxpipeStats.blocksConverted,
-              pagesRendered: pxpipeStats.pagesRendered,
-              estTokensSaved: pxpipeStats.estTokensSaved,
-              cacheHits: pxpipeStats.cacheHits,
-            },
-            'pxpipe converted request blocks to images',
-          );
-        }
-        if (dedup.blocksDeduped > 0 || pxpipeStats.blocksConverted > 0) {
-          outboundBody = optimized.body;
+        if (outcome.changed) {
+          outboundBody = outcome.body;
           bodyTransformed = true;
         }
       }

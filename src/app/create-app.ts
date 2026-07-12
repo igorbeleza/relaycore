@@ -6,6 +6,7 @@ import type { AppConfig } from '../config/env.js';
 import { DashboardService } from '../dashboard/service.js';
 import { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import { MetricsRegistry } from '../metrics/metrics-registry.js';
+import { createBuiltinPlugins, type PluginRegistry } from '../plugins/index.js';
 import { RenderCache } from '../pxpipe/render-cache.js';
 import { PureImageRenderer, type TextRenderer } from '../pxpipe/renderer.js';
 import { FetchAnthropicClient, type AnthropicClient } from '../providers/anthropic-client.js';
@@ -23,6 +24,7 @@ export type CreateAppOptions = Readonly<{
   metrics?: MetricsRegistry;
   upstreamHealthChecker?: UpstreamHealthChecker;
   textRenderer?: TextRenderer;
+  plugins?: PluginRegistry;
   dashboard?: DashboardService;
 }>;
 
@@ -104,16 +106,16 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
   }
 
   registerDebugRoute(app, config, diagnostics);
+  const plugins =
+    options.plugins ??
+    createBuiltinPlugins(options.textRenderer ?? new PureImageRenderer(), new RenderCache());
   registerMessagesRoute(
     app,
+    config,
     options.anthropicClient ?? new FetchAnthropicClient(config),
     diagnostics,
     metrics,
-    {
-      config,
-      renderer: options.textRenderer ?? new PureImageRenderer(),
-      cache: new RenderCache(),
-    },
+    plugins,
     dashboard,
   );
 

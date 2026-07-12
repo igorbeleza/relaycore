@@ -147,6 +147,25 @@ Invoke-RestMethod -Uri 'http://127.0.0.1:47822/debug/errors?error_type=invalid_r
 
 Without `DEBUG_TOKEN`, debug endpoints respond as not found.
 
+## dedup: duplicate-block request transform
+
+When `DEDUP_ENABLED=true`, RelayCore collapses large text blocks that repeat
+verbatim across `POST /v1/messages` into short references, so the upstream is
+billed for each long block only once. Responses are never modified.
+
+- Opt-in: `DEDUP_ENABLED=false` by default.
+- Runs **before** pxpipe, so pxpipe never spends work rendering content dedup
+  already removed.
+- Fail-open: any error forwards the original request unchanged.
+- Metrics: `relaycore_dedup_*` counters on `GET /metrics`.
+
+| Variable                  | Default                 | Meaning                                 |
+| ------------------------- | ----------------------- | --------------------------------------- |
+| `DEDUP_ENABLED`           | `false`                 | Master switch.                          |
+| `DEDUP_MIN_CHARS`         | `500`                   | Minimum block size considered (`100`+). |
+| `DEDUP_SCOPE`             | `user_and_tool_results` | Or `tool_results_only`.                 |
+| `DEDUP_KEEP_RECENT_TURNS` | `0`                     | Most recent user turns left untouched.  |
+
 ## pxpipe: text-to-image request transform
 
 When `PXPIPE_ENABLED=true`, RelayCore converts large text blocks in old user
@@ -175,6 +194,15 @@ Before enabling in daily use, run the manual smoke test below once per model
 you use (OneProvider models: <https://oneprovider.dev/docs/api/models>; vision
 docs: <https://oneprovider.dev/docs/api/vision>).
 
+## Optimizer plugins
+
+dedup and pxpipe are both built-in **plugins** running through a shared registry
+that executes them in a fixed order (dedup, then pxpipe) with per-plugin fault
+isolation: a failing optimizer is skipped fail-open and counted at
+`relaycore_plugin_failures_total` on `GET /metrics`, never failing the request.
+See [`docs/plugins.md`](docs/plugins.md) for the plugin contract and how to add
+your own optimizer.
+
 ## Savings dashboard
 
 When `DASHBOARD_ENABLED=true` (the default), RelayCore serves a local
@@ -191,12 +219,12 @@ percentiles, and a feed of recent requests.
 - Fail-open: dashboard recording never blocks or fails a proxied request.
 - Disabled: with `DASHBOARD_ENABLED=false`, both endpoints respond as not found.
 
-| Variable                   | Default          | Meaning                                            |
-| -------------------------- | ---------------- | -------------------------------------------------- |
-| `DASHBOARD_ENABLED`        | `true`           | Master switch for the dashboard endpoints.         |
-| `RELAYCORE_DATA_DIR`       | OS data dir      | Directory for the persisted event log.             |
-| `DASHBOARD_RETENTION_DAYS` | `30`             | Days of events retained (`1`–`365`).               |
-| `DASHBOARD_RECENT_LIMIT`   | `50`             | Recent requests shown in the feed (`1`–`500`).     |
+| Variable                   | Default     | Meaning                                        |
+| -------------------------- | ----------- | ---------------------------------------------- |
+| `DASHBOARD_ENABLED`        | `true`      | Master switch for the dashboard endpoints.     |
+| `RELAYCORE_DATA_DIR`       | OS data dir | Directory for the persisted event log.         |
+| `DASHBOARD_RETENTION_DAYS` | `30`        | Days of events retained (`1`–`365`).           |
+| `DASHBOARD_RECENT_LIMIT`   | `50`        | Recent requests shown in the feed (`1`–`500`). |
 
 ## License
 

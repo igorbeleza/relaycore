@@ -111,6 +111,38 @@ describe('pxpipe integration', () => {
     expect(metrics.body).toContain('relaycore_pxpipe_blocks_converted_total 1');
   });
 
+  it('converts realistic multi-line code-like text via line packing', async () => {
+    const createMessage = vi.fn().mockResolvedValue(okUpstream());
+    const app = createApp(pxpipeConfig, {
+      anthropicClient: { createMessage },
+      textRenderer: new FakeRenderer(),
+    });
+    apps.push(app);
+
+    const codeLike = Array.from({ length: 700 }, () => 'a'.repeat(80)).join('\n');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/v1/messages',
+      payload: {
+        model: 'claude-sonnet-4-6',
+        max_tokens: 16,
+        messages: [
+          { role: 'user', content: [{ type: 'text', text: codeLike }] },
+          { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+          { role: 'user', content: 'latest question' },
+        ],
+        stream: false,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const sentBody = createMessage.mock.calls[0][0] as {
+      messages: Array<{ content: unknown }>;
+    };
+    const firstContent = sentBody.messages[0].content as Array<Record<string, unknown>>;
+    expect(firstContent[0]).toMatchObject({ type: 'image' });
+  });
+
   it('forwards the body untouched when pxpipe is disabled', async () => {
     const createMessage = vi.fn().mockResolvedValue(okUpstream());
     const app = createApp(

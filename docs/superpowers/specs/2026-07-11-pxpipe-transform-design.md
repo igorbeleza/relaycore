@@ -64,6 +64,34 @@ A block is converted only when **all** conditions hold:
    - `estImageTokens ≈ pages × ceil((pageWidth × pageHeight) / 750)`.
 4. The request `model` supports vision upstream (see §6).
 
+#### 3.2.1 Line packing (join-pack reflow)
+
+Real text (source code, logs, JSON) averages far fewer characters per line
+than the page's column budget. A naive layout that maps one input line to one
+page row wastes most of each page's column capacity, so the image ends up
+*more* expensive per character than the text it replaces — the cost-compare
+gate then rejects nearly every real block, even though it accepts synthetic
+single-long-line fixtures.
+
+To fix this, `layoutLines` packs consecutive short original lines onto a
+single page row (joined by a single space) up to `COLUMNS_PER_LINE`, instead
+of preserving a strict one-input-line-per-row mapping:
+
+- Blank lines always flush any pending packed row and are emitted as their
+  own empty row — paragraph/block structure (e.g. blank lines between
+  functions or log entries) is never absorbed into a packed row.
+- Lines already longer than `COLUMNS_PER_LINE` flush the pending row and are
+  hard-wrapped exactly as before.
+- This is a superset of the original behavior: text that is already dense
+  (one line ≥ the column budget, or every line separated by blank lines)
+  produces identical output to the pre-packing algorithm.
+
+Tradeoff: a packed row loses per-line visual alignment after its first
+original line (indentation of joined lines isn't preserved). This is
+accepted in exchange for making the cost-compare gate actually pass on
+realistic multi-line text; block/paragraph structure via blank lines is
+still preserved.
+
 ### 3.3 Replacement format
 
 The original block is replaced by:
@@ -77,9 +105,15 @@ original sequence.
 
 ## 4. Rendering
 
-- Monospace text rasterized to PNG pages: width `1568px`, height up to `1568px`
-  per page (Anthropic's max useful long edge), ~152 columns × ~40 lines per page
-  at the chosen font size. Deterministic output: same input → byte-identical PNG.
+- Monospace text rasterized to PNG pages: width `1568px`, `312` columns ×
+  `91` lines per page (`COLUMNS_PER_LINE` / `LINES_PER_PAGE` in
+  `src/pxpipe/estimator.ts`). Geometry is aligned with the
+  [teamchong/pxpipe](https://github.com/teamchong/pxpipe) reference
+  implementation's Claude profile, which is calibrated against real upstream
+  token billing (N=391 production rows); page height is derived from this
+  project's own font metrics (`LINE_HEIGHT_PX`) rather than the reference's
+  `728px`, which assumes a denser bitmap font this renderer doesn't use.
+  Deterministic output: same input → byte-identical PNG.
 - **`TextRenderer` interface is injected** (same pattern as `upstream-health.ts`),
   so unit/integration tests use a fake renderer and never rasterize.
 - Initial implementation: pure-JS rasterizer (e.g. `pureimage`) to avoid native

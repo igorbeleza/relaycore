@@ -29,6 +29,33 @@ describe('layoutLines', () => {
   it('preserves empty lines and expands tabs', () => {
     expect(layoutLines('a\n\n\tb')).toEqual(['a', '', '  b']);
   });
+
+  it('packs consecutive short lines into a single row', () => {
+    expect(layoutLines('aa\nbb\ncc')).toEqual(['aa bb cc']);
+  });
+
+  it('does not pack across a blank line', () => {
+    expect(layoutLines('aa\n\nbb')).toEqual(['aa', '', 'bb']);
+  });
+
+  it('does not pack across an over-length line', () => {
+    const longLine = 'x'.repeat(COLUMNS_PER_LINE + 5);
+    expect(layoutLines(`aa\n${longLine}\nbb`)).toEqual([
+      'aa',
+      'x'.repeat(COLUMNS_PER_LINE),
+      'x'.repeat(5),
+      'bb',
+    ]);
+  });
+
+  it('flushes the packed row exactly at the column boundary', () => {
+    const fits = 'a'.repeat(COLUMNS_PER_LINE - 3);
+    const overflowsByOne = 'bb';
+    expect(layoutLines(`${fits}\n${overflowsByOne}`)).toEqual([`${fits} ${overflowsByOne}`]);
+
+    const exact = 'a'.repeat(COLUMNS_PER_LINE - 2);
+    expect(layoutLines(`${exact}\n${overflowsByOne}`)).toEqual([exact, overflowsByOne]);
+  });
 });
 
 describe('paginate', () => {
@@ -50,7 +77,7 @@ describe('evaluateBlock', () => {
   });
 
   it('rejects blocks that would exceed PXPIPE_MAX_PAGES_PER_BLOCK', () => {
-    const text = `${'x'.repeat(10)}\n`.repeat(600);
+    const text = `${'x'.repeat(10)}\n`.repeat(15_000);
     expect(evaluateBlock(text, config)).toEqual({ eligible: false, reason: 'too_many_pages' });
   });
 
@@ -68,6 +95,21 @@ describe('evaluateBlock', () => {
       expect(result.pages).toHaveLength(1);
       expect(result.estTextTokens).toBe(5_000);
       expect(result.estImageTokens).toBe(IMAGE_TOKENS_PER_PAGE);
+    }
+  });
+
+  it('accepts realistic multi-line code-like text via line packing', () => {
+    // Regression guard: short lines (average code line length, not one giant
+    // dense line) must still become eligible once packed, or pxpipe silently
+    // never activates on real traffic.
+    const text = Array.from({ length: 700 }, () => 'a'.repeat(80)).join('\n');
+    const result = evaluateBlock(text, config);
+    expect(result.eligible).toBe(true);
+    if (result.eligible) {
+      expect(result.pages).toHaveLength(3);
+      expect(result.estTextTokens).toBe(14_175);
+      expect(result.estImageTokens).toBe(3 * IMAGE_TOKENS_PER_PAGE);
+      expect(result.estImageTokens).toBeLessThan(result.estTextTokens * config.pxpipeSavingsFactor);
     }
   });
 });

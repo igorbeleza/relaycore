@@ -46,7 +46,25 @@ describe('transformRequestBody', () => {
     expect(content.at(-1)).toEqual({ type: 'text', text: STUB_TEXT });
     expect(result.stats.blocksConverted).toBe(1);
     expect(result.stats.pagesRendered).toBe(1);
-    expect(result.stats.estTokensSaved).toBe(5_000 - 3_262);
+    expect(result.stats.estTokensSaved).toBe(5_000 - 2_284);
+  });
+
+  it('converts realistic multi-line code-like text via line packing', async () => {
+    const codeLike = Array.from({ length: 700 }, () => 'a'.repeat(80)).join('\n');
+    const body = {
+      messages: [{ role: 'user', content: [{ type: 'text', text: codeLike }] }],
+    };
+    const result = await transformRequestBody(
+      body,
+      makeConfig(),
+      new FakeRenderer(),
+      new RenderCache(),
+    );
+    const messages = (result.body as { messages: Array<{ content: unknown }> }).messages;
+    const content = messages[0].content as Array<Record<string, unknown>>;
+    expect(content[0]).toMatchObject({ type: 'image' });
+    expect(result.stats.blocksConverted).toBe(1);
+    expect(result.stats.pagesRendered).toBe(3);
   });
 
   it('does not mutate the original body', async () => {

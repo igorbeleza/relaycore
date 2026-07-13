@@ -1,3 +1,5 @@
+import { performance } from 'node:perf_hooks';
+
 import type { AppConfig } from '../config/env.js';
 import type { OptimizationEvent } from '../dashboard/event-store.js';
 import type { PluginContext, PluginStats, RelayPlugin } from './types.js';
@@ -50,14 +52,17 @@ export class PluginRegistry {
 
     for (const plugin of this.plugins) {
       if (plugin.transformRequest === undefined || !plugin.isEnabled(ctx.config)) continue;
+      const startedAt = performance.now();
       try {
         const result = await plugin.transformRequest(current, ctx);
+        ctx.metrics.recordPluginTransformDuration(plugin.name, performance.now() - startedAt);
         statsByPlugin[plugin.name] = result.stats;
         if (result.changed) {
           current = result.body;
           changed = true;
         }
       } catch (error) {
+        ctx.metrics.recordPluginTransformDuration(plugin.name, performance.now() - startedAt);
         this.recordFailure(plugin.name, error, ctx);
       }
     }

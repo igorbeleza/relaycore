@@ -51,10 +51,32 @@ describe('MetricsRegistry', () => {
 
     const output = metrics.renderPrometheus();
 
-    expect(output).toContain(
-      '# TYPE relaycore_plugin_failures_total counter',
-    );
+    expect(output).toContain('# TYPE relaycore_plugin_failures_total counter');
     expect(output).toContain('relaycore_plugin_failures_total{plugin="dedup"} 1');
     expect(output).toContain('relaycore_plugin_failures_total{plugin="pxpipe"} 2');
+  });
+
+  it('exports a plugin transform duration histogram keyed by plugin name', () => {
+    const metrics = new MetricsRegistry();
+    metrics.recordPluginTransformDuration('dedup', 0.05);
+    metrics.recordPluginTransformDuration('dedup', 2);
+
+    const output = metrics.renderPrometheus();
+
+    expect(output).toContain('# TYPE relaycore_plugin_transform_duration_seconds histogram');
+    // 0.05ms falls in the smallest bucket (<=0.0001s); 2ms falls in the 0.005s bucket.
+    expect(output).toContain(
+      'relaycore_plugin_transform_duration_seconds_bucket{plugin="dedup",le="0.0001"} 1',
+    );
+    expect(output).toContain(
+      'relaycore_plugin_transform_duration_seconds_bucket{plugin="dedup",le="0.005"} 2',
+    );
+    expect(output).toContain(
+      'relaycore_plugin_transform_duration_seconds_bucket{plugin="dedup",le="+Inf"} 2',
+    );
+    expect(output).toContain('relaycore_plugin_transform_duration_seconds_count{plugin="dedup"} 2');
+    expect(output).toMatch(
+      /relaycore_plugin_transform_duration_seconds_sum\{plugin="dedup"\} 0\.00205/,
+    );
   });
 });

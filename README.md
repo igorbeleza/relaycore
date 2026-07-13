@@ -203,6 +203,16 @@ isolation: a failing optimizer is skipped fail-open and counted at
 See [`docs/plugins.md`](docs/plugins.md) for the plugin contract and how to add
 your own optimizer.
 
+Each plugin's `transformRequest` wall-clock time is recorded regardless of
+outcome (success or fail-open) as a Prometheus histogram, so p50/p95 overhead
+per optimizer is queryable instead of estimated:
+
+```text
+relaycore_plugin_transform_duration_seconds_bucket{plugin="dedup",le="0.005"} 42
+relaycore_plugin_transform_duration_seconds_sum{plugin="dedup"} 0.183
+relaycore_plugin_transform_duration_seconds_count{plugin="dedup"} 50
+```
+
 ## Savings dashboard
 
 When `DASHBOARD_ENABLED=true` (the default), RelayCore serves a local

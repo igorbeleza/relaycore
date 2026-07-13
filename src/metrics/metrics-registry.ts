@@ -13,6 +13,21 @@ type RequestAggregate = {
   durationSecondsTotal: number;
 };
 
+/**
+ * Bucket upper bounds (seconds) for the plugin transform duration histogram.
+ * Spans ~0.1ms to ~1s, sized around measured dedup/pxpipe costs (sub-ms for
+ * typical request bodies, low tens of ms for very large ones).
+ */
+const PLUGIN_DURATION_BUCKETS_SECONDS = [
+  0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1,
+] as const;
+
+type PluginDurationHistogram = {
+  bucketCounts: number[];
+  sum: number;
+  count: number;
+};
+
 function escapeLabel(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', '\\n');
 }
@@ -28,6 +43,7 @@ export class MetricsRegistry {
   private pxpipeUpstreamRejected = 0;
   private dedupBlocksDeduped = 0;
   private dedupTokensSavedEstimate = 0;
+  private readonly pluginTransformDurations = new Map<string, PluginDurationHistogram>();
 
   public startRequest(): void {
     this.inFlight += 1;
@@ -69,6 +85,25 @@ export class MetricsRegistry {
     this.pluginFailures.set(plugin, (this.pluginFailures.get(plugin) ?? 0) + 1);
   }
 
+  /** Records one `transformRequest` call's wall-clock duration for `plugin`. */
+  public recordPluginTransformDuration(plugin: string, durationMs: number): void {
+    const durationSeconds = durationMs / 1_000;
+    const histogram = this.pluginTransformDurations.get(plugin) ?? {
+      bucketCounts: new Array<number>(PLUGIN_DURATION_BUCKETS_SECONDS.length).fill(0),
+      sum: 0,
+      count: 0,
+    };
+    const bucketIndex = PLUGIN_DURATION_BUCKETS_SECONDS.findIndex(
+      (upperBound) => durationSeconds <= upperBound,
+    );
+    if (bucketIndex !== -1) {
+      histogram.bucketCounts[bucketIndex] += 1;
+    }
+    histogram.sum += durationSeconds;
+    histogram.count += 1;
+    this.pluginTransformDurations.set(plugin, histogram);
+  }
+
   public renderPrometheus(): string {
     const lines = [
       '# HELP relaycore_http_requests_in_flight Number of HTTP requests currently being handled.',
@@ -100,6 +135,8 @@ export class MetricsRegistry {
       `relaycore_dedup_tokens_saved_estimate_total ${this.dedupTokensSavedEstimate}`,
       '# HELP relaycore_plugin_failures_total Plugin hook failures isolated by the registry (fail-open), by plugin.',
       '# TYPE relaycore_plugin_failures_total counter',
+      "# HELP relaycore_plugin_transform_duration_seconds Duration of each plugin's transformRequest hook.",
+      '# TYPE relaycore_plugin_transform_duration_seconds histogram',
     ];
 
     for (const [key, aggregate] of this.requests) {
@@ -119,6 +156,26 @@ export class MetricsRegistry {
 
     for (const [plugin, count] of this.pluginFailures) {
       lines.push(`relaycore_plugin_failures_total{plugin="${escapeLabel(plugin)}"} ${count}`);
+    }
+
+    for (const [plugin, histogram] of this.pluginTransformDurations) {
+      const label = escapeLabel(plugin);
+      let cumulative = 0;
+      for (let i = 0; i < PLUGIN_DURATION_BUCKETS_SECONDS.length; i++) {
+        cumulative += histogram.bucketCounts[i];
+        lines.push(
+          `relaycore_plugin_transform_duration_seconds_bucket{plugin="${label}",le="${PLUGIN_DURATION_BUCKETS_SECONDS[i]}"} ${cumulative}`,
+        );
+      }
+      lines.push(
+        `relaycore_plugin_transform_duration_seconds_bucket{plugin="${label}",le="+Inf"} ${histogram.count}`,
+      );
+      lines.push(
+        `relaycore_plugin_transform_duration_seconds_sum{plugin="${label}"} ${histogram.sum}`,
+      );
+      lines.push(
+        `relaycore_plugin_transform_duration_seconds_count{plugin="${label}"} ${histogram.count}`,
+      );
     }
 
     return `${lines.join('\n')}\n`;

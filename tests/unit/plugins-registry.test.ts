@@ -49,7 +49,10 @@ describe('PluginRegistry', () => {
 
   it('threads the body through enabled transforms in order', async () => {
     const registry = new PluginRegistry([markerPlugin('a', '-A'), markerPlugin('b', '-B')]);
-    const outcome = await registry.runTransforms('start', makeCtx(makeConfig(), new MetricsRegistry()));
+    const outcome = await registry.runTransforms(
+      'start',
+      makeCtx(makeConfig(), new MetricsRegistry()),
+    );
 
     expect(outcome.body).toBe('start-A-B');
     expect(outcome.changed).toBe(true);
@@ -90,7 +93,9 @@ describe('PluginRegistry', () => {
     expect(outcome.body).toBe('start-A-B');
     expect(outcome.changed).toBe(true);
     expect(outcome.statsByPlugin).not.toHaveProperty('boom');
-    expect(metrics.renderPrometheus()).toContain('relaycore_plugin_failures_total{plugin="boom"} 1');
+    expect(metrics.renderPrometheus()).toContain(
+      'relaycore_plugin_failures_total{plugin="boom"} 1',
+    );
   });
 
   it('does not mark changed when a transform reports changed:false', async () => {
@@ -105,6 +110,24 @@ describe('PluginRegistry', () => {
     );
     expect(outcome.changed).toBe(false);
     expect(outcome.statsByPlugin).toEqual({ noop: { estTokensSaved: 0 } });
+  });
+
+  it('records a transform duration sample for each enabled plugin, including throwing ones', async () => {
+    const boom: RelayPlugin = {
+      name: 'boom',
+      isEnabled: () => true,
+      transformRequest() {
+        throw new Error('kaboom');
+      },
+    };
+    const metrics = new MetricsRegistry();
+    const registry = new PluginRegistry([markerPlugin('a', '-A'), boom]);
+
+    await registry.runTransforms('start', makeCtx(makeConfig(), metrics));
+
+    const output = metrics.renderPrometheus();
+    expect(output).toContain('relaycore_plugin_transform_duration_seconds_count{plugin="a"} 1');
+    expect(output).toContain('relaycore_plugin_transform_duration_seconds_count{plugin="boom"} 1');
   });
 
   it('isolates a throwing onComplete hook and continues to later plugins', () => {
@@ -127,6 +150,8 @@ describe('PluginRegistry', () => {
 
     expect(() => registry.runOnComplete(event, makeCtx(makeConfig(), metrics))).not.toThrow();
     expect(calls).toEqual(['obs']);
-    expect(metrics.renderPrometheus()).toContain('relaycore_plugin_failures_total{plugin="boom"} 1');
+    expect(metrics.renderPrometheus()).toContain(
+      'relaycore_plugin_failures_total{plugin="boom"} 1',
+    );
   });
 });

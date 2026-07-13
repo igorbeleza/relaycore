@@ -18,6 +18,16 @@ export type TimeBucket = Readonly<{
   tokensSaved: number;
 }>;
 
+export type SessionStats = Readonly<{
+  sessionId: string;
+  requests: number;
+  tokensSaved: number;
+  dedupTokensSaved: number;
+  pxpipeTokensSaved: number;
+  imageTransforms: number;
+  bytesIn: number;
+}>;
+
 export type RecentRequest = Readonly<{
   ts: number;
   requestId: string;
@@ -46,6 +56,7 @@ export type StatsSnapshot = Readonly<{
     savingsPct: number;
     bytesIn: number;
     bytesOut: number;
+    imageTransforms: number;
   }>;
   traffic: Readonly<{
     requests: number;
@@ -56,9 +67,22 @@ export type StatsSnapshot = Readonly<{
   hourly: readonly TimeBucket[];
   daily: readonly TimeBucket[];
   recent: readonly RecentRequest[];
+  /** Top sessions by tokens saved (up to 10). */
+  topSessions: readonly SessionStats[];
+  /** Per-session stats for every tracked session. */
+  allSessions: readonly SessionStats[];
 }>;
 
 type MutableBucket = { requests: number; tokensSaved: number };
+
+type MutableSession = {
+  requests: number;
+  tokensSaved: number;
+  dedupTokensSaved: number;
+  pxpipeTokensSaved: number;
+  imageTransforms: number;
+  bytesIn: number;
+};
 
 /**
  * Incremental in-memory aggregation of optimization events. Seeded once from the
@@ -81,6 +105,7 @@ export class StatsAggregator {
   private estInputTokens = 0;
   private bytesIn = 0;
   private bytesOut = 0;
+  private imageTransforms = 0;
   private durationSumMs = 0;
   private windowFrom: number | null = null;
 
@@ -90,6 +115,8 @@ export class StatsAggregator {
   private readonly hourly = new Map<number, MutableBucket>();
   private readonly daily = new Map<number, MutableBucket>();
   private readonly recent: RecentRequest[] = [];
+  private readonly sessions = new Map<string, MutableSession>();
+  private readonly sessionIds = new Map<string, string>();
 
   public constructor(recentLimit: number = DEFAULT_RECENT_LIMIT) {
     this.recentLimit = Math.max(1, recentLimit);
@@ -110,6 +137,7 @@ export class StatsAggregator {
     this.blocksDeduped += event.dedup.blocksDeduped;
     this.blocksConverted += event.pxpipe.blocksConverted;
     this.pagesRendered += event.pxpipe.pagesRendered;
+    this.imageTransforms += event.pxpipe.blocksConverted;
     this.cacheHits += event.pxpipe.cacheHits;
     this.renderFailures += event.pxpipe.renderFailures;
     if (event.pxpipe.upstreamRejected) this.upstreamRejections += 1;
@@ -141,6 +169,27 @@ export class StatsAggregator {
       tokensSaved,
     });
     if (this.recent.length > this.recentLimit) this.recent.length = this.recentLimit;
+
+    // Track per-session stats.
+    const sid = event.sessionId;
+    if (sid) {
+      const sess = this.sessions.get(sid) ?? {
+        requests: 0,
+        tokensSaved: 0,
+        dedupTokensSaved: 0,
+        pxpipeTokensSaved: 0,
+        imageTransforms: 0,
+        bytesIn: 0,
+      };
+      sess.requests += 1;
+      sess.tokensSaved += tokensSaved;
+      sess.dedupTokensSaved += dedupSaved;
+      sess.pxpipeTokensSaved += pxpipeSaved;
+      sess.imageTransforms += event.pxpipe.blocksConverted;
+      sess.bytesIn += event.bytesIn;
+      this.sessions.set(sid, sess);
+      this.sessionIds.set(sid, sid);
+    }
   }
 
   private sampleDuration(durationMs: number): void {
@@ -219,6 +268,7 @@ export class StatsAggregator {
         savingsPct,
         bytesIn: this.bytesIn,
         bytesOut: this.bytesOut,
+        imageTransforms: this.imageTransforms,
       },
       traffic: {
         requests: this.requests,
@@ -229,6 +279,23 @@ export class StatsAggregator {
       hourly: this.materializeSeries(this.hourly, MS_PER_HOUR, HOURLY_WINDOW, now),
       daily: this.materializeSeries(this.daily, MS_PER_DAY, DAILY_WINDOW, now),
       recent: [...this.recent],
+      topSessions: this.sessionStats(10),
+      allSessions: this.sessionStats(this.sessions.size),
     };
+  }
+
+  private sessionStats(count: number): SessionStats[] {
+    return [...this.sessions.entries()]
+      .sort(([, a], [, b]) => b.tokensSaved - a.tokensSaved)
+      .slice(0, count)
+      .map(([id, s]) => ({
+        sessionId: id,
+        requests: s.requests,
+        tokensSaved: s.tokensSaved,
+        dedupTokensSaved: s.dedupTokensSaved,
+        pxpipeTokensSaved: s.pxpipeTokensSaved,
+        imageTransforms: s.imageTransforms,
+        bytesIn: s.bytesIn,
+      }));
   }
 }

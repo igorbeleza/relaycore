@@ -36,6 +36,8 @@ describe('StatsAggregator', () => {
     expect(snap.windowFrom).toBeNull();
     expect(snap.traffic.p95DurationMs).toBe(0);
     expect(snap.recent).toEqual([]);
+    expect(snap.topSessions).toEqual([]);
+    expect(snap.allSessions).toEqual([]);
   });
 
   it('sums dedup and pxpipe savings into lifetime totals', () => {

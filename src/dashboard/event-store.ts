@@ -1,4 +1,5 @@
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -30,6 +31,8 @@ export type OptimizationEvent = Readonly<{
     renderFailures: number;
     upstreamRejected: boolean;
   }>;
+  /** Stable session identifier derived from the request body. */
+  sessionId?: string;
 }>;
 
 const MS_PER_DAY = 24 * 60 * 60 * 1_000;
@@ -40,6 +43,13 @@ export type EventStoreLogger = Readonly<{
 }>;
 
 const NOOP_LOGGER: EventStoreLogger = { warn: () => {} };
+
+/** Extract a stable session ID from a request body (hash of first 256 bytes). */
+export function extractSessionId(body: unknown): string {
+  if (typeof body !== 'object' || body === null) return '';
+  const raw = JSON.stringify(body);
+  return createHash('sha256').update(raw.slice(0, 256)).digest('hex').slice(0, 8);
+}
 
 function resolveDataDir(config: AppConfig): string {
   return config.relaycoreDataDir ?? join(homedir(), '.relaycore');

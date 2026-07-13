@@ -275,6 +275,7 @@ const SCRIPT = `
     $("kpi-avg").textContent = fmtMs(tr.avgDurationMs);
     $("kpi-p95").textContent = fmtMs(tr.p95DurationMs);
     $("kpi-bytes").textContent = fmtBytes(t.bytesIn) + " → " + fmtBytes(t.bytesOut);
+    $("kpi-images").textContent = fmtInt(t.imageTransforms) + " converted to images";
 
     // Breakdown
     var dedup = t.dedupTokensSaved || 0, px = t.pxpipeTokensSaved || 0;
@@ -327,6 +328,42 @@ const SCRIPT = `
     var from = d.windowFrom ? fmtTime(d.windowFrom) : "—";
     $("window").textContent = "since " + from;
     $("generated").textContent = "updated " + new Date(d.generatedAt).toLocaleTimeString("en-US", { hour12: false });
+
+    // Top sessions
+    var top = d.topSessions || [];
+    if (top.length === 0) {
+      $("top-sessions-body").innerHTML = '<tr><td colspan="7" class="empty">No sessions yet.</td></tr>';
+    } else {
+      $("top-sessions-body").innerHTML = top.map(function (s) {
+        return '<tr>' +
+          '<td class="mono-muted" style="font-size:11px">' + esc(s.sessionId) + '</td>' +
+          '<td class="num">' + fmtInt(s.requests) + '</td>' +
+          '<td class="num" style="color:var(--accent)">' + fmtCompact(s.tokensSaved) + '</td>' +
+          '<td class="num">' + fmtCompact(s.dedupTokensSaved) + '</td>' +
+          '<td class="num">' + fmtCompact(s.pxpipeTokensSaved) + '</td>' +
+          '<td class="num">' + fmtInt(s.imageTransforms) + '</td>' +
+          '<td class="num mono-muted">' + fmtBytes(s.bytesIn) + '</td>' +
+          '</tr>';
+      }).join("");
+    }
+
+    // Full history
+    var all = d.allSessions || [];
+    if (all.length === 0) {
+      $("all-sessions-body").innerHTML = '<tr><td colspan="7" class="empty">No sessions yet.</td></tr>';
+    } else {
+      $("all-sessions-body").innerHTML = all.map(function (s) {
+        return '<tr>' +
+          '<td class="mono-muted" style="font-size:11px">' + esc(s.sessionId) + '</td>' +
+          '<td class="num">' + fmtInt(s.requests) + '</td>' +
+          '<td class="num" style="color:var(--accent)">' + fmtCompact(s.tokensSaved) + '</td>' +
+          '<td class="num">' + fmtCompact(s.dedupTokensSaved) + '</td>' +
+          '<td class="num">' + fmtCompact(s.pxpipeTokensSaved) + '</td>' +
+          '<td class="num">' + fmtInt(s.imageTransforms) + '</td>' +
+          '<td class="num mono-muted">' + fmtBytes(s.bytesIn) + '</td>' +
+          '</tr>';
+      }).join("");
+    }
   }
 
   function setStatus(live) {
@@ -414,7 +451,7 @@ export function renderDashboardHtml(): string {
 
   <div class="grid cols-4" style="margin-bottom:14px;">
     <div class="card kpi"><span class="label">Savings rate</span><span class="value good" id="kpi-savings">0%</span><span class="foot">tokens saved ÷ est. input</span></div>
-    <div class="card kpi"><span class="label">Requests</span><span class="value" id="kpi-requests">0</span><span class="foot mono-muted" id="kpi-bytes">0 B → 0 B</span></div>
+    <div class="card kpi"><span class="label">Requests</span><span class="value" id="kpi-requests">0</span><span class="foot mono-muted" id="kpi-bytes">0 B → 0 B</span><span class="foot mono-muted" id="kpi-images">0 converted to images</span></div>
     <div class="card kpi"><span class="label">Avg latency</span><span class="value" id="kpi-avg">0ms</span><span class="foot">per request</span></div>
     <div class="card kpi"><span class="label">p95 latency</span><span class="value" id="kpi-p95">0ms</span><span class="foot">per request</span></div>
   </div>
@@ -453,6 +490,40 @@ export function renderDashboardHtml(): string {
         </thead>
         <tbody id="recent-body">
           <tr><td colspan="6" class="empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h2>Top sessions (by tokens saved)</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Session</th><th class="num">Requests</th><th class="num">Saved</th>
+            <th class="num">Dedup</th><th class="num">Pxpipe</th><th class="num">Images</th><th class="num">Input</th>
+          </tr>
+        </thead>
+        <tbody id="top-sessions-body">
+          <tr><td colspan="7" class="empty">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:14px;">
+    <h2>Full history (all sessions)</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Session</th><th class="num">Requests</th><th class="num">Saved</th>
+            <th class="num">Dedup</th><th class="num">Pxpipe</th><th class="num">Images</th><th class="num">Input</th>
+          </tr>
+        </thead>
+        <tbody id="all-sessions-body">
+          <tr><td colspan="7" class="empty">Loading…</td></tr>
         </tbody>
       </table>
     </div>

@@ -118,6 +118,11 @@ Every response contains an `x-request-id`. RelayCore logs safe request metadata 
 HTTP method, route, status, duration, selected model, and upstream status. It never logs request
 bodies, model output, or provider keys.
 
+Per-request access logs ("Request received"/"Request completed") are suppressed for
+`GET /dashboard/stats.json` and `GET /health`, since these are polled every few seconds by the
+dashboard's auto-refresh (and by external healthchecks) and would otherwise flood the console.
+Both routes are still counted in `/metrics`.
+
 Prometheus-compatible metrics are available locally at `GET /metrics`.
 
 Upstream failures are counted by HTTP status and sanitized error type:

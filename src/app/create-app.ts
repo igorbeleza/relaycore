@@ -40,9 +40,12 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
     bodyLimit: config.maxRequestBodyBytes,
   });
 
+  const QUIET_PATHS = new Set(['/dashboard/stats.json', '/health']);
+
   app.addHook('onRequest', async (request, reply) => {
     metrics.startRequest();
     reply.header('x-request-id', request.id);
+    if (QUIET_PATHS.has(request.url.split('?')[0])) return;
     request.log.info(
       { requestId: request.id, method: request.method, path: request.url },
       'Request received',
@@ -58,6 +61,7 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
       statusCode: reply.statusCode,
       durationMs,
     });
+    if (QUIET_PATHS.has(route)) return;
     request.log.info(
       {
         requestId: request.id,

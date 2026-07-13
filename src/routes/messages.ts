@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
 import type { AppConfig } from '../config/env.js';
 import type { OptimizationEvent } from '../dashboard/event-store.js';
+import { extractSessionId } from '../dashboard/event-store.js';
 import type { DashboardService } from '../dashboard/service.js';
 import type { DiagnosticsRegistry } from '../diagnostics/diagnostics-registry.js';
 import type { MetricsRegistry } from '../metrics/metrics-registry.js';
@@ -317,6 +318,7 @@ function buildOptimizationEvent(
   startedAt: number,
   dedup: DedupSummary,
   pxpipe: PxpipeSummary,
+  body: unknown,
 ): OptimizationEvent {
   return {
     ts: startedAt,
@@ -330,6 +332,7 @@ function buildOptimizationEvent(
     bytesOut: estimateBytesOut(reply),
     dedup,
     pxpipe,
+    sessionId: extractSessionId(body),
   };
 }
 
@@ -353,7 +356,7 @@ export function registerMessagesRoute(
       metrics,
     };
     const recordEvent = (): void => {
-      const event = buildOptimizationEvent(request, reply, startedAt, dedupSummary, pxpipeSummary);
+      const event = buildOptimizationEvent(request, reply, startedAt, dedupSummary, pxpipeSummary, request.body);
       if (dashboard) dashboard.record(event);
       plugins.runOnComplete(event, pluginContext);
     };

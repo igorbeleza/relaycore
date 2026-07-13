@@ -210,6 +210,8 @@ self-contained dashboard that summarizes the tokens saved by pxpipe and dedup,
 alongside request counts, converted/deduplicated block counts, latency
 percentiles, and a feed of recent requests.
 
+- `GET /` redirects to `/dashboard` for convenience:
+  `http://127.0.0.1:47822/`.
 - Shell: `GET /dashboard` returns a static HTML page (no external assets).
 - Live feed: `GET /dashboard/stats.json` returns the current snapshot with a
   `cache-control: no-store` header; the page polls it in the background.

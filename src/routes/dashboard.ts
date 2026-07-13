@@ -9,6 +9,7 @@ import type { DashboardService } from '../dashboard/service.js';
  * live JSON feed at `/dashboard/stats.json`. Both are no-ops when the dashboard
  * is disabled via config. The HTML is rendered once at startup and served from
  * memory; the JSON reflects the aggregator's current snapshot on every poll.
+ * The server root (`/`) redirects to `/dashboard` for convenience.
  */
 export function registerDashboardRoute(
   app: FastifyInstance,
@@ -18,6 +19,10 @@ export function registerDashboardRoute(
   if (!config.dashboardEnabled) return;
 
   const html = renderDashboardHtml();
+
+  app.get('/', async (_request, reply) => {
+    return reply.redirect('/dashboard');
+  });
 
   app.get('/dashboard', async (_request, reply) => {
     return reply.type('text/html; charset=utf-8').send(html);

@@ -7,4 +7,5 @@ coverage/
 .DS_Store
 *.log
 
-.claude/settings.local.json
+.claude/
+superpowers/

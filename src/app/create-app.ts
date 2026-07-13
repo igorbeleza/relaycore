@@ -35,6 +35,7 @@ export function createApp(config: AppConfig, options: CreateAppOptions = {}): Fa
     logger: {
       level: config.logLevel,
     },
+    disableRequestLogging: true,
     requestIdHeader: 'x-request-id',
     genReqId: () => randomUUID(),
     bodyLimit: config.maxRequestBodyBytes,
